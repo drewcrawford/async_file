@@ -26,7 +26,7 @@ pub struct Error(sys::Error);
     #[test]
     fn test_open_file() {
         test_executors::spin_on(async {
-            let file = File::open("test.txt").await.unwrap();
+            let file = File::open("/dev/zero").await.unwrap();
         });
     }
 }
