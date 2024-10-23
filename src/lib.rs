@@ -194,6 +194,7 @@ We do have send/sync and Unpin
 
     #[test]
     fn test_seek_file() {
+        logwise::context::Context::reset("test_seek_file");
         test_executors::spin_on(async {
             let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
             let pos = file.seek(std::io::SeekFrom::Start(1024), Priority::unit_test()).await.unwrap();
@@ -217,6 +218,7 @@ We do have send/sync and Unpin
     }
 
     #[test] fn test_length() {
+        logwise::context::Context::reset("test_length");
         test_executors::spin_on(async {
             let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
             let metadata = file.metadata(Priority::unit_test()).await.unwrap();
