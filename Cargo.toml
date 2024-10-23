@@ -7,6 +7,6 @@ edition = "2021"
 blocking = "1.6.1"
 thiserror = "1.0.65"
 logwise = "0.1.1"
-
+priority = "0.1"
 [dev-dependencies]
 test_executors = ">=0"

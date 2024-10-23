@@ -8,6 +8,7 @@ use std::path::Path;
 use std_impl as sys;
 
 pub struct File(sys::File);
+pub type Priority = priority::Priority;
 
 /**
 An opaque buffer type.
@@ -65,8 +66,8 @@ impl Into<Box<[u8]>> for Data {
 }
 
 impl File {
-    pub async fn open(path: impl AsRef<Path>) -> Result<Self,Error> {
-        sys::File::open(path).await.map(File).map_err(Error)
+    pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self,Error> {
+        sys::File::open(path, priority).await.map(File).map_err(Error)
     }
     /**
 
@@ -83,8 +84,8 @@ impl File {
 
        * The buffer is returned as an opaque type, [Data].
     */
-    pub async fn read(&mut self, buf_size: usize) -> Result<(usize, Data), Error> {
-        self.0.read(buf_size).await.map(|(read, data)| (read, Data(data))).map_err(Error)
+    pub async fn read(&mut self, buf_size: usize, priority: Priority) -> Result<(usize, Data), Error> {
+        self.0.read(buf_size,priority).await.map(|(read, data)| (read, Data(data))).map_err(Error)
     }
 
     /**
@@ -92,8 +93,8 @@ impl File {
 
     Only one operation may be in-flight at a time.
     */
-    pub async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        self.0.seek(pos).await.map_err(Error)
+    pub async fn seek(&mut self, pos: std::io::SeekFrom, priority: Priority) -> Result<u64, Error> {
+        self.0.seek(pos,priority).await.map_err(Error)
     }
 }
 
@@ -105,21 +106,21 @@ pub struct Error(sys::Error);
 
 
 #[cfg(test)] mod tests {
-    use crate::File;
+    use crate::{File, Priority};
 
     #[test]
     fn test_open_file() {
         logwise::context::Context::reset("test_open_file");
         test_executors::spin_on(async {
-            let _file = File::open("/dev/zero").await.unwrap();
+            let _file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
         });
     }
     #[test]
     fn test_read_file() {
         logwise::context::Context::reset("test_read_file");
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero").await.unwrap();
-            let (read, buf) = file.read(1024).await.unwrap();
+            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let (read, buf) = file.read(1024, Priority::unit_test()).await.unwrap();
             assert_eq!(read, 1024);
             assert_eq!(buf.len(), 1024);
             assert_eq!(buf.iter().all(|&x| x == 0), true);
@@ -129,8 +130,8 @@ pub struct Error(sys::Error);
     #[test]
     fn test_seek_file() {
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero").await.unwrap();
-            let pos = file.seek(std::io::SeekFrom::Start(1024)).await.unwrap();
+            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let pos = file.seek(std::io::SeekFrom::Start(1024), Priority::unit_test()).await.unwrap();
             assert_eq!(pos, 1024);
         });
     }

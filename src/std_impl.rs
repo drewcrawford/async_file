@@ -3,6 +3,7 @@ use std::path::Path;
 use blocking::unblock;
 use std::io::Seek;
 use std::ops::Deref;
+use crate::Priority;
 
 /**
 stdlib-based implementation*/
@@ -41,13 +42,13 @@ impl File {
     fn new(file: std::fs::File) -> Self {
         File(Some(file))
     }
-    pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub async fn open(path: impl AsRef<Path>, _priority: Priority) -> Result<Self, Error> {
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         let path = path.as_ref().to_owned();
         unblock(|| std::fs::File::open(path)).await.map(File::new).map_err(|e| e.into())
     }
 
-    pub async fn read(&mut self, buf_size: usize) -> Result<(usize, Data), Error> {
+    pub async fn read(&mut self, buf_size: usize, _priority: Priority) -> Result<(usize, Data), Error> {
         let mut move_file = self.0.take().expect("File operation in-flight already");
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         unblock(move || {
@@ -69,7 +70,7 @@ impl File {
         }).map_err(|e| e.into())
     }
 
-    pub async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    pub async fn seek(&mut self, pos: std::io::SeekFrom, _priority: Priority) -> Result<u64, Error> {
         let mut move_file = self.0.take().expect("File operation in-flight already");
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         unblock(move || {
