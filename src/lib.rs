@@ -113,6 +113,7 @@ impl File {
 #[error("afile error {0}")]
 pub struct Error(sys::Error);
 
+#[derive(Debug)]
 pub struct Metadata(sys::Metadata);
 impl Metadata {
     /**
@@ -161,11 +162,17 @@ I think we don't expect the OS to have pointers into them, so unpin should be sa
  */
 
 
+/*
+Metadata
+std derives Clone but not Copy
+Doesn't look like we support Eq, Ord, Hash, etc.
+We do have send/sync and Unpin
+ */
 
 
 
 #[cfg(test)] mod tests {
-    use crate::{Data, File, Priority};
+    use crate::{Data, File, Metadata, Priority};
 
     #[test]
     fn test_open_file() {
@@ -199,12 +206,14 @@ I think we don't expect the OS to have pointers into them, so unpin should be sa
         fn _assert_send_sync<T: Send + Sync>() {}
         _assert_send_sync::<Data>();
         _assert_send_sync::<File>();
+        _assert_send_sync::<Metadata>();
     }
 
     #[test] fn test_unpin() {
         fn _assert_unpin<T: Unpin>() {}
         _assert_unpin::<Data>();
         _assert_unpin::<File>();
+        _assert_unpin::<Metadata>();
     }
 
     #[test] fn test_length() {

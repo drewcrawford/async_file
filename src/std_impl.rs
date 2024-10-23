@@ -21,6 +21,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Data(Box<[u8]>);
 
+#[derive(Debug)]
 pub struct Metadata(std::fs::Metadata);
 
 impl Metadata {
