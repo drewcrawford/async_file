@@ -2,6 +2,8 @@ use std::io::Read;
 use std::path::Path;
 use blocking::unblock;
 use std::io::Seek;
+use std::ops::Deref;
+
 /**
 stdlib-based implementation*/
 
@@ -14,6 +16,27 @@ pub enum Error {
     Io(#[from] std::io::Error)
 }
 
+pub struct Data(Box<[u8]>);
+
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Deref for Data {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Data {
+    pub fn into_boxed_slice(self) -> Box<[u8]> {
+        self.0
+    }
+}
+
 impl File {
     fn new(file: std::fs::File) -> Self {
         File(Some(file))
@@ -24,7 +47,7 @@ impl File {
         unblock(|| std::fs::File::open(path)).await.map(File::new).map_err(|e| e.into())
     }
 
-    pub async fn read(&mut self, buf_size: usize) -> Result<(usize, Box<[u8]>), Error> {
+    pub async fn read(&mut self, buf_size: usize) -> Result<(usize, Data), Error> {
         let mut move_file = self.0.take().expect("File operation in-flight already");
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         unblock(move || {
@@ -40,7 +63,9 @@ impl File {
             }
         }).await.map(|(file, read, buf)| {
             self.0 = Some(file);
-            (read, buf)
+            let data = Data(buf);
+
+            (read, data)
         }).map_err(|e| e.into())
     }
 
