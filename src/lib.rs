@@ -4,9 +4,11 @@ afile is a simple file I/O library for Rust.
 
 mod std_impl;
 
+use std::hash::Hash;
 use std::path::Path;
 use std_impl as sys;
 
+#[derive(Debug)]
 pub struct File(sys::File);
 pub type Priority = priority::Priority;
 
@@ -28,6 +30,7 @@ To bridge to slice, use `as_ref` or `deref`.  To bridge to a `Box<[u8]>`, use `i
 
 
 */
+#[derive(Debug)]
 pub struct Data(sys::Data);
 
 impl AsRef<[u8]> for Data {
@@ -103,10 +106,49 @@ impl File {
 #[error("afile error {0}")]
 pub struct Error(sys::Error);
 
+/*
+boilerplates.
+
+Data - OS probably supports a clone op via refcount, but i think we don't want to expose it – use rc/arc if you want that.
+PartialEq and Eq are at least possible to implement via slice
+Ord does not make a ton of sense to me
+
+Hash is possible...
+No to default/display
+Send/sync ought to be possible, since it's immutable
+unpin - should be safe to unpin, even if it seems to have an internal pointer somewhere.
+ */
+
+impl PartialEq for Data {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+impl Eq for Data {}
+
+impl Hash for Data {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
+
+/*
+File
+fs does not have a clone op, so we don't either
+does not have eq or ord, hash, default, display
+
+No asref/asmut, as we don't want to expose internals
+
+Files ought to be send at least.  Probably sync as well, although we don't expose many immutable methods.
+I think we don't expect the OS to have pointers into them, so unpin should be safe.
+ */
+
+
+
 
 
 #[cfg(test)] mod tests {
-    use crate::{File, Priority};
+    use crate::{Data, File, Priority};
 
     #[test]
     fn test_open_file() {
@@ -133,5 +175,18 @@ pub struct Error(sys::Error);
             let pos = file.seek(std::io::SeekFrom::Start(1024), Priority::unit_test()).await.unwrap();
             assert_eq!(pos, 1024);
         });
+    }
+
+    #[test]
+    fn test_send_sync() {
+        fn _assert_send_sync<T: Send + Sync>() {}
+        _assert_send_sync::<Data>();
+        _assert_send_sync::<File>();
+    }
+
+    #[test] fn test_unpin() {
+        fn _assert_unpin<T: Unpin>() {}
+        _assert_unpin::<Data>();
+        _assert_unpin::<File>();
     }
 }

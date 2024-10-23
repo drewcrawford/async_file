@@ -8,6 +8,7 @@ use crate::Priority;
 /**
 stdlib-based implementation*/
 
+#[derive(Debug)]
 pub struct File(Option<std::fs::File>);
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +18,9 @@ pub enum Error {
     Io(#[from] std::io::Error)
 }
 
+#[derive(Debug)]
 pub struct Data(Box<[u8]>);
+
 
 impl AsRef<[u8]> for Data {
     fn as_ref(&self) -> &[u8] {
@@ -88,3 +91,13 @@ impl File {
         }).map_err(|e| e.into())
     }
 }
+
+//boilerplate impls
+
+impl PartialEq for Data {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+
