@@ -87,7 +87,7 @@ impl File {
 
        * The buffer is returned as an opaque type, [Data].
     */
-    pub async fn read(&mut self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
+    pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
         self.0.read(buf_size,priority).await.map(Data).map_err(Error)
     }
 

@@ -61,7 +61,7 @@ impl File {
         unblock(|| std::fs::File::open(path)).await.map(File::new).map_err(|e| e.into())
     }
 
-    pub async fn read(&mut self, buf_size: usize, _priority: Priority) -> Result<Data, Error> {
+    pub async fn read(&self, buf_size: usize, _priority: Priority) -> Result<Data, Error> {
         let mut move_file = self.0.clone();
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         unblock(move || {
