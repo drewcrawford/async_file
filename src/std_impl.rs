@@ -21,6 +21,14 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Data(Box<[u8]>);
 
+pub struct Metadata(std::fs::Metadata);
+
+impl Metadata {
+    pub fn len(&self) -> u64 {
+        self.0.len()
+    }
+}
+
 
 impl AsRef<[u8]> for Data {
     fn as_ref(&self) -> &[u8] {
@@ -89,6 +97,19 @@ impl File {
             self.0 = Some(file);
             pos
         }).map_err(|e| e.into())
+    }
+
+    pub async fn metadata(&mut self, _priority: Priority) -> Result<Metadata, Error> {
+        let move_file = self.0.take().expect("File operation in-flight already");
+        logwise::perfwarn_begin!("afile uses blocking on this platform");
+
+        unblock(move || {
+            let metadata = move_file.metadata();
+            metadata.map(|m| Metadata(m)).map(|m| (move_file, m))
+        }).await.map(|(move_file, metadata)| {
+            self.0 = Some(move_file);
+            Ok(metadata)
+        })?
     }
 }
 

@@ -99,12 +99,29 @@ impl File {
     pub async fn seek(&mut self, pos: std::io::SeekFrom, priority: Priority) -> Result<u64, Error> {
         self.0.seek(pos,priority).await.map_err(Error)
     }
+
+    /**
+    Returns metadata about the file.  Compare with `std::fs::File::metadata`.
+*/
+    pub async fn metadata(&mut self, priority: Priority) -> Result<Metadata, Error> {
+        self.0.metadata(priority).await.map(Metadata).map_err(Error)
+    }
 }
 
 #[derive(Debug)]
 #[derive(thiserror::Error)]
 #[error("afile error {0}")]
 pub struct Error(sys::Error);
+
+pub struct Metadata(sys::Metadata);
+impl Metadata {
+    /**
+    Returns the length of the file in bytes.
+    */
+    pub fn len(&self) -> u64 {
+        self.0.len()
+    }
+}
 
 /*
 boilerplates.
@@ -188,5 +205,13 @@ I think we don't expect the OS to have pointers into them, so unpin should be sa
         fn _assert_unpin<T: Unpin>() {}
         _assert_unpin::<Data>();
         _assert_unpin::<File>();
+    }
+
+    #[test] fn test_length() {
+        test_executors::spin_on(async {
+            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let metadata = file.metadata(Priority::unit_test()).await.unwrap();
+            assert_eq!(metadata.len(), 0);
+        });
     }
 }
