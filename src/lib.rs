@@ -106,12 +106,18 @@ impl File {
     pub async fn metadata(&self, priority: Priority) -> Result<Metadata, Error> {
         self.0.metadata(priority).await.map(Metadata).map_err(Error)
     }
+
+    pub async fn read_all(&self, priority: Priority) -> Result<Data, Error> {
+        let metadata = self.0.metadata(priority).await.map(Metadata)?;
+        let len = metadata.len();
+        self.read(len.try_into().unwrap(), priority).await
+    }
 }
 
 #[derive(Debug)]
 #[derive(thiserror::Error)]
 #[error("afile error {0}")]
-pub struct Error(sys::Error);
+pub struct Error(#[from] sys::Error);
 
 #[derive(Debug)]
 pub struct Metadata(sys::Metadata);
