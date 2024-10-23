@@ -48,7 +48,7 @@ impl File {
         unblock(|| std::fs::File::open(path)).await.map(File::new).map_err(|e| e.into())
     }
 
-    pub async fn read(&mut self, buf_size: usize, _priority: Priority) -> Result<(usize, Data), Error> {
+    pub async fn read(&mut self, buf_size: usize, _priority: Priority) -> Result<Data, Error> {
         let mut move_file = self.0.take().expect("File operation in-flight already");
         logwise::perfwarn_begin!("afile uses blocking on this platform");
         unblock(move || {
@@ -56,17 +56,16 @@ impl File {
             let read = move_file.read(&mut buf);
             match read {
                 Ok(read) => {
-                    Ok((move_file, read, buf.into_boxed_slice()))
+                    buf.truncate(read);
+                    Ok((move_file, buf.into_boxed_slice()))
                 }
                 Err(e) => {
                     Err(e)
                 }
             }
-        }).await.map(|(file, read, buf)| {
+        }).await.map(|(file, buf)| {
             self.0 = Some(file);
-            let data = Data(buf);
-
-            (read, data)
+            Data(buf)
         }).map_err(|e| e.into())
     }
 

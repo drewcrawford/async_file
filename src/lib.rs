@@ -84,8 +84,8 @@ impl File {
 
        * The buffer is returned as an opaque type, [Data].
     */
-    pub async fn read(&mut self, buf_size: usize, priority: Priority) -> Result<(usize, Data), Error> {
-        self.0.read(buf_size,priority).await.map(|(read, data)| (read, Data(data))).map_err(Error)
+    pub async fn read(&mut self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
+        self.0.read(buf_size,priority).await.map(Data).map_err(Error)
     }
 
     /**
@@ -120,8 +120,7 @@ pub struct Error(sys::Error);
         logwise::context::Context::reset("test_read_file");
         test_executors::spin_on(async {
             let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
-            let (read, buf) = file.read(1024, Priority::unit_test()).await.unwrap();
-            assert_eq!(read, 1024);
+            let buf = file.read(1024, Priority::unit_test()).await.unwrap();
             assert_eq!(buf.len(), 1024);
             assert_eq!(buf.iter().all(|&x| x == 0), true);
         });
