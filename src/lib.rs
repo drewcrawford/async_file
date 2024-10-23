@@ -103,7 +103,7 @@ impl File {
     /**
     Returns metadata about the file.  Compare with `std::fs::File::metadata`.
 */
-    pub async fn metadata(&mut self, priority: Priority) -> Result<Metadata, Error> {
+    pub async fn metadata(&self, priority: Priority) -> Result<Metadata, Error> {
         self.0.metadata(priority).await.map(Metadata).map_err(Error)
     }
 }
