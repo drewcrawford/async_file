@@ -114,6 +114,26 @@ impl File {
     }
 }
 
+/**
+Tests if a file or directory exists at the given path.
+
+# Examples
+
+```rust
+# async fn example() {
+use async_file::{exists, Priority};
+
+let exists = exists("/dev/zero", Priority::unit_test()).await;
+if exists {
+    println!("File exists");
+}
+# }
+```
+*/
+pub async fn exists(path: impl AsRef<Path>, priority: Priority) -> bool {
+    sys::exists(path, priority).await
+}
+
 #[derive(Debug)]
 #[derive(thiserror::Error)]
 #[error("afile error {0}")]
@@ -191,7 +211,7 @@ We do have send/sync and Unpin
     fn test_read_file() {
         logwise::context::Context::reset("test_read_file");
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
             let buf = file.read(1024, Priority::unit_test()).await.unwrap();
             assert_eq!(buf.len(), 1024);
             assert_eq!(buf.iter().all(|&x| x == 0), true);
@@ -226,9 +246,17 @@ We do have send/sync and Unpin
     #[test] fn test_length() {
         logwise::context::Context::reset("test_length");
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
             let metadata = file.metadata(Priority::unit_test()).await.unwrap();
             assert_eq!(metadata.len(), 0);
+        });
+    }
+
+    #[test] fn test_exists() {
+        logwise::context::Context::reset("test_exists");
+        test_executors::spin_on(async {
+            assert_eq!(crate::exists("/dev/zero", Priority::unit_test()).await, true);
+            assert_eq!(crate::exists("/nonexistent/path", Priority::unit_test()).await, false);
         });
     }
 }

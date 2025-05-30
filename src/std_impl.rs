@@ -70,7 +70,7 @@ impl File {
             match read {
                 Ok(read) => {
                     buf.truncate(read);
-                    Ok((buf.into_boxed_slice()))
+                    Ok(buf.into_boxed_slice())
                 }
                 Err(e) => {
                     Err(e)
@@ -112,6 +112,12 @@ impl PartialEq for Data {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
+}
+
+pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
+    let path = path.as_ref().to_owned();
+    logwise::perfwarn_begin!("afile uses blocking on this platform");
+    unblock(move || path.exists()).await
 }
 
 
