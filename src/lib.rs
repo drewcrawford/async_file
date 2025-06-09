@@ -1,11 +1,42 @@
 /*!
-async_file is a simple file I/O library for Rust.  It is designed to:
+Asynchronous file I/O operations with priority handling.
 
-* Follow the stdlib API design closely where reasonable
-* Provide an efficient and backend-agnostic API for file operations
-* Ship a default implementation using the standard library
+![logo](../../../art/logo.png)
 
+`async_file` provides a simple yet powerful API for performing asynchronous file operations
+in Rust. It closely follows the standard library's file API design while adding async
+support and priority-based scheduling.
 
+# Features
+
+* **Async Operations**: All file operations are asynchronous, allowing for non-blocking I/O
+* **Priority Scheduling**: Every operation accepts a priority parameter for fine-grained control
+* **Memory Safety**: Uses an opaque `Data` type to safely handle OS-managed memory allocations
+* **Platform Agnostic**: Backend-agnostic API with a default std implementation
+
+# Quick Start
+
+```
+# async fn example() -> Result<(), async_file::Error> {
+use async_file::{File, Priority};
+
+// Open a file with unit test priority
+let file = File::open("/dev/zero", Priority::unit_test()).await?;
+
+// Read up to 1KB of data
+let data = file.read(1024, Priority::unit_test()).await?;
+println!("Read {} bytes", data.len());
+# Ok(())
+# }
+```
+
+# Design Philosophy
+
+This library enforces that only one operation may be in-flight at a time per file handle.
+This constraint simplifies the implementation and prevents many classes of concurrency bugs.
+
+The library uses opaque types (`File`, `Data`, `Metadata`) that wrap platform-specific
+implementations, providing a clean abstraction layer while maintaining efficiency.
 */
 
 mod std_impl;
@@ -14,28 +45,73 @@ use std::hash::Hash;
 use std::path::Path;
 use std_impl as sys;
 
+/// A handle to an open file for asynchronous I/O operations.
+///
+/// `File` provides async methods for reading, seeking, and retrieving metadata.
+/// All operations require a priority parameter for scheduling control.
+///
+/// # Constraints
+///
+/// Only one operation may be in-flight at a time per file handle. This means
+/// you cannot start a new operation until the previous one completes.
+///
+/// # Examples
+///
+/// ```
+/// # async fn example() -> Result<(), async_file::Error> {
+/// use async_file::{File, Priority};
+///
+/// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+/// let data = file.read(100, Priority::unit_test()).await?;
+/// assert_eq!(data.len(), 100);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct File(sys::File);
+
+/// A priority value for scheduling file operations.
+///
+/// This is a re-export of the `priority::Priority` type. Use this to control
+/// the scheduling priority of your file operations.
 pub type Priority = priority::Priority;
 
-/**
-An opaque buffer type.
-
-# Design
-
-Imagine the OS implements reasonable syscalls like `read` by passing you a pointer into
-kernel memory.  You can read the memory, but you can't write it, but you do need to free it.
-
-You can copy it into a vec or something and free it straightaway, but the copy may be undesireable.
-
-For reading we can import into Rust as a slice.  But for freeing we need a custom Drop implementation,
-and we can't Drop a reference; that has no effect.
-
-So here's an opaque type that can be bridged to the slice but may have a custom Drop implementation.
-To bridge to slice, use `as_ref` or `deref`.  To bridge to a `Box<[u8]>`, use `into_boxed_slice`.
-
-
-*/
+/// An opaque buffer type that holds data read from files.
+///
+/// `Data` represents memory that may be allocated and managed by the OS. It provides
+/// safe access to the underlying bytes while ensuring proper cleanup through its
+/// custom `Drop` implementation.
+///
+/// # Design Rationale
+///
+/// When performing async I/O, the OS may continue writing to a buffer even after
+/// a Rust future is cancelled. By having the OS control both allocation and deallocation,
+/// we avoid use-after-free bugs. This type safely wraps OS-managed memory.
+///
+/// # Usage
+///
+/// You can access the underlying bytes through several methods:
+/// - `as_ref()` or `deref()` to get a `&[u8]` slice
+/// - `into_boxed_slice()` to convert to a `Box<[u8]>` (may require copying)
+///
+/// # Examples
+///
+/// ```
+/// # async fn example() -> Result<(), async_file::Error> {
+/// use async_file::{File, Priority};
+///
+/// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+/// let data = file.read(10, Priority::unit_test()).await?;
+///
+/// // Access as a slice
+/// assert_eq!(data.as_ref(), &[0; 10]);
+///
+/// // Or convert to a boxed slice
+/// let boxed: Box<[u8]> = data.into_boxed_slice();
+/// assert_eq!(&*boxed, &[0; 10]);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Data(sys::Data);
 
@@ -52,17 +128,40 @@ impl std::ops::Deref for Data {
 }
 
 impl Data {
-    /**
-    Converts into a boxed slice.
-
-    # Performance
-
-    On platforms where it is sensible, this is a zero-cost operation.
-    On platforms where it isn't, this may require a copy.
-
-    Consider the pros and cons of converting to a boxed slice vs keeping the Data type around.
-
-    */
+    /// Converts this `Data` into a boxed byte slice.
+    ///
+    /// # Performance
+    ///
+    /// - On platforms where the underlying memory layout is compatible, this is
+    ///   a zero-cost operation
+    /// - On other platforms, this may require copying the data
+    ///
+    /// # When to Use
+    ///
+    /// Use this method when you need to:
+    /// - Store the data in a collection that requires owned slices
+    /// - Pass ownership to code expecting `Box<[u8]>`
+    /// - Ensure the data outlives the original `Data` object
+    ///
+    /// If you only need to read the data, prefer using `as_ref()` or `deref()`
+    /// to avoid potential copying.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+    /// let data = file.read(5, Priority::unit_test()).await?;
+    ///
+    /// // Convert to boxed slice for storage
+    /// let boxed: Box<[u8]> = data.into_boxed_slice();
+    /// assert_eq!(boxed.len(), 5);
+    /// assert!(boxed.iter().all(|&b| b == 0));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn into_boxed_slice(self) -> Box<[u8]> {
         self.0.into_boxed_slice()
     }
@@ -75,27 +174,82 @@ impl Into<Box<[u8]>> for Data {
 }
 
 impl File {
+    /// Opens a file at the given path for reading.
+    ///
+    /// This is an async operation that returns a `File` handle on success.
+    /// The file is opened in read-only mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the file to open
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file doesn't exist
+    /// - Permissions are insufficient
+    /// - Other I/O errors occur
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// // Open a file with unit test priority
+    /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+    ///
+    /// // Open with highest async priority for critical operations
+    /// let important_file = File::open("/dev/zero", Priority::highest_async()).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self, Error> {
         sys::File::open(path, priority)
             .await
             .map(File)
             .map_err(Error)
     }
-    /**
-
-    Reads up to `buf_size` bytes from the file.  Compare with `std::fs::File::read`.
-
-    Only one operation may be in-flight at a time.
-
-    Some differences from `fs` are:
-       * Memory is allocated by the OS instead of by you.
-
-         Imagine that you start a read operation.  After starting it, you cancel the operation (drop a future).
-         Maybe we do some cancel logic, but also our OS is still writing into the buffer for awhile.  The best
-         way to handle this is for the OS to also control the allocation.
-
-       * The buffer is returned as an opaque type, [Data].
-    */
+    /// Reads up to `buf_size` bytes from the file.
+    ///
+    /// This method is similar to `std::fs::File::read` but with key differences:
+    ///
+    /// # Memory Management
+    ///
+    /// Unlike the standard library, memory is allocated by the OS rather than
+    /// by the caller. This prevents use-after-free bugs if a read operation
+    /// is cancelled (by dropping the future) while the OS is still writing
+    /// to the buffer.
+    ///
+    /// # Return Value
+    ///
+    /// Returns a `Data` object containing the bytes read. The actual number
+    /// of bytes read may be less than `buf_size` if:
+    /// - End of file is reached
+    /// - The read is interrupted
+    ///
+    /// # Constraints
+    ///
+    /// Only one operation may be in-flight at a time per file handle.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+    ///
+    /// // Read up to 1KB
+    /// let data = file.read(1024, Priority::unit_test()).await?;
+    /// println!("Read {} bytes", data.len());
+    ///
+    /// // Access the data as a slice
+    /// let first_ten: &[u8] = &data[..10.min(data.len())];
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
         self.0
             .read(buf_size, priority)
@@ -104,22 +258,102 @@ impl File {
             .map_err(Error)
     }
 
-    /**
-    Seeks to a position in the file.  Compare with `std::fs::File::seek`.
-
-    Only one operation may be in-flight at a time.
-    */
+    /// Seeks to a position in the file.
+    ///
+    /// This method changes the position for the next read operation.
+    /// It behaves like `std::fs::File::seek`.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to seek to, using `std::io::SeekFrom`
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Returns
+    ///
+    /// Returns the new position from the start of the file in bytes.
+    ///
+    /// # Constraints
+    ///
+    /// Only one operation may be in-flight at a time per file handle.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    /// use std::io::SeekFrom;
+    ///
+    /// let mut file = File::open("/dev/zero", Priority::unit_test()).await?;
+    ///
+    /// // Seek to byte 100
+    /// let pos = file.seek(SeekFrom::Start(100), Priority::unit_test()).await?;
+    /// assert_eq!(pos, 100);
+    ///
+    /// // Seek forward 50 bytes from current position
+    /// let new_pos = file.seek(SeekFrom::Current(50), Priority::unit_test()).await?;
+    /// assert_eq!(new_pos, 150);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn seek(&mut self, pos: std::io::SeekFrom, priority: Priority) -> Result<u64, Error> {
         self.0.seek(pos, priority).await.map_err(Error)
     }
 
-    /**
-        Returns metadata about the file.  Compare with `std::fs::File::metadata`.
-    */
+    /// Returns metadata about the file.
+    ///
+    /// This method retrieves information about the file such as its size.
+    /// It behaves like `std::fs::File::metadata`.
+    ///
+    /// # Arguments
+    ///
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+    /// let metadata = file.metadata(Priority::unit_test()).await?;
+    ///
+    /// println!("File size: {} bytes", metadata.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn metadata(&self, priority: Priority) -> Result<Metadata, Error> {
         self.0.metadata(priority).await.map(Metadata).map_err(Error)
     }
 
+    /// Reads the entire contents of the file.
+    ///
+    /// This is a convenience method that first retrieves the file's metadata
+    /// to determine its size, then reads that many bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The metadata operation fails
+    /// - The read operation fails
+    /// - The file is too large to fit in memory
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// let file = File::open("small_file.txt", Priority::unit_test()).await?;
+    /// let contents = file.read_all(Priority::unit_test()).await?;
+    ///
+    /// println!("File contains {} bytes", contents.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn read_all(&self, priority: Priority) -> Result<Data, Error> {
         let metadata = self.0.metadata(priority).await.map(Metadata)?;
         let len = metadata.len();
@@ -147,16 +381,64 @@ pub async fn exists(path: impl AsRef<Path>, priority: Priority) -> bool {
     sys::exists(path, priority).await
 }
 
+/// An error that can occur during file operations.
+///
+/// This is a wrapper around platform-specific error types. It implements
+/// `std::error::Error` and can be converted to/from `std::io::Error`.
+///
+/// # Examples
+///
+/// ```
+/// # async fn example() {
+/// use async_file::{File, Priority};
+///
+/// match File::open("nonexistent.txt", Priority::unit_test()).await {
+///     Ok(file) => println!("File opened successfully"),
+///     Err(e) => eprintln!("Failed to open file: {}", e),
+/// }
+/// # }
+/// ```
 #[derive(Debug, thiserror::Error)]
 #[error("afile error {0}")]
 pub struct Error(#[from] sys::Error);
 
+/// Metadata information about a file.
+///
+/// This structure contains file metadata such as size. It's returned by
+/// the `File::metadata` method.
+///
+/// # Examples
+///
+/// ```
+/// # async fn example() -> Result<(), async_file::Error> {
+/// use async_file::{File, Priority};
+///
+/// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+/// let metadata = file.metadata(Priority::unit_test()).await?;
+///
+/// println!("File size: {} bytes", metadata.len());
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Metadata(sys::Metadata);
 impl Metadata {
-    /**
-    Returns the length of the file in bytes.
-    */
+    /// Returns the size of the file in bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), async_file::Error> {
+    /// use async_file::{File, Priority};
+    ///
+    /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
+    /// let metadata = file.metadata(Priority::unit_test()).await?;
+    ///
+    /// // /dev/zero is a special file with size 0
+    /// assert_eq!(metadata.len(), 0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn len(&self) -> u64 {
         self.0.len()
     }
