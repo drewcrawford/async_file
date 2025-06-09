@@ -343,7 +343,7 @@ impl File {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::{File, Priority};
     ///
