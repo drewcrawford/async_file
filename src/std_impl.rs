@@ -22,7 +22,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Data(Box<[u8]>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metadata(std::fs::Metadata);
 
 impl Metadata {

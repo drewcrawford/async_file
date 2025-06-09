@@ -420,7 +420,7 @@ pub struct Error(#[from] sys::Error);
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metadata(sys::Metadata);
 impl Metadata {
     /// Returns the size of the file in bytes.
@@ -445,16 +445,62 @@ impl Metadata {
 }
 
 /*
-boilerplates.
+Boilerplate section, for types in order of appearance in the main section.
+ */
 
-Data - OS probably supports a clone op via refcount, but i think we don't want to expose it – use rc/arc if you want that.
-PartialEq and Eq are at least possible to implement via slice
-Ord does not make a ton of sense to me
+/*
+File
 
-Hash is possible...
-No to default/display
-Send/sync ought to be possible, since it's immutable
-unpin - should be safe to unpin, even if it seems to have an internal pointer somewhere.
+Clone: Not implemented. The underlying std::fs::File doesn't support Clone as it
+represents an exclusive handle to an open file descriptor.
+
+Copy: Not implemented for the same reason as Clone.
+
+PartialEq/Eq: Not implemented. File handles are unique and equality comparison
+doesn't make semantic sense.
+
+Hash: Not implemented without Eq.
+
+Default: Not implemented. There's no meaningful default file.
+
+Display: Not implemented. File handles are not typically displayed to users.
+
+AsRef/AsMut: Not implemented. We want to control the API surface and not expose
+the underlying file handle directly.
+
+Send/Sync: Automatically derived and safe. Files can be sent between threads
+and accessed from multiple threads (though our API enforces single operation
+at a time).
+
+Unpin: Automatically derived and safe since there are no self-references.
+ */
+
+/*
+Data
+
+Clone: Not implemented. The OS probably supports a clone operation via refcount,
+but we deliberately don't expose it. Use Arc<Data> if you need shared ownership.
+
+Copy: Not implemented. Data represents potentially large buffers that shouldn't
+be copied implicitly.
+
+PartialEq/Eq: Implemented. Comparison via the underlying byte slice is meaningful
+and useful for testing and validation.
+
+Ord: Not implemented. Lexicographic ordering of byte data rarely makes sense
+in file I/O contexts.
+
+Hash: Implemented. Hashing byte data is useful for caching and deduplication
+scenarios.
+
+Default: Not implemented. There's no meaningful default data buffer.
+
+Display: Not implemented. Binary data is not typically displayed as text.
+
+Send/Sync: Automatically derived and safe since the data is immutable.
+
+Unpin: Safe to unpin even if there are internal pointers, as the data is
+immutable after creation.
  */
 
 impl PartialEq for Data {
@@ -471,21 +517,35 @@ impl Hash for Data {
 }
 
 /*
-File
-fs does not have a clone op, so we don't either
-does not have eq or ord, hash, default, display
-
-No asref/asmut, as we don't want to expose internals
-
-Files ought to be send at least.  Probably sync as well, although we don't expose many immutable methods.
-I think we don't expect the OS to have pointers into them, so unpin should be safe.
- */
-
-/*
 Metadata
-std derives Clone but not Copy
-Doesn't look like we support Eq, Ord, Hash, etc.
-We do have send/sync and Unpin
+
+Clone: Implemented via derive. std::fs::Metadata supports Clone and it makes sense
+for metadata to be cloneable as it's just informational data that users may want
+to store or pass around.
+
+Copy: Not implemented. std::fs::Metadata doesn't support Copy as it's not a trivial
+type - it contains platform-specific metadata that may include complex structures.
+
+PartialEq/Eq: Not implemented. std::fs::Metadata doesn't support equality comparison,
+likely because metadata can include timestamps and other volatile information that
+makes equality semantics unclear.
+
+Hash: Not implemented. std::fs::Metadata doesn't support hashing, and without Eq
+it wouldn't make sense anyway.
+
+Default: Not implemented. There's no meaningful default metadata - metadata must
+come from an actual file.
+
+Display: Not implemented. Metadata is not typically formatted for end-user display.
+
+From/Into: Not obvious conversions exist. We don't want users converting between
+our metadata and std metadata directly.
+
+AsRef/AsMut: Not implemented. We want to control the API surface and not expose
+the underlying std::fs::Metadata directly.
+
+Send/Sync: Automatically derived since std::fs::Metadata is Send + Sync.
+Unpin: Automatically derived and safe since there are no self-references.
  */
 
 #[cfg(test)]
@@ -518,7 +578,8 @@ mod tests {
     fn test_seek_file() {
         logwise::context::Context::reset("test_seek_file");
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero", Priority::unit_test())
+            //tough to seek /dev/zero on linux for some reason
+            let mut file = File::open("/etc/services", Priority::unit_test())
                 .await
                 .unwrap();
             let pos = file
