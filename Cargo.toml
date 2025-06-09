@@ -10,8 +10,7 @@ homepage = "https://sealedabstract.com/code/async_file"
 categories = ["asynchronous","filesystem"]
 keywords = ["async", "await", "file", "io", "filesystem"]
 exclude = [".*"]
-rust-version = "1.85.0"
-
+rust-version = "1.85.1"
 [dependencies]
 blocking = "1.6"
 thiserror = "2.0"
