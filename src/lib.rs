@@ -167,9 +167,9 @@ impl Data {
     }
 }
 
-impl Into<Box<[u8]>> for Data {
-    fn into(self) -> Box<[u8]> {
-        self.into_boxed_slice()
+impl From<Data> for Box<[u8]> {
+    fn from(val: Data) -> Self {
+        val.into_boxed_slice()
     }
 }
 
@@ -441,6 +441,11 @@ impl Metadata {
     /// ```
     pub fn len(&self) -> u64 {
         self.0.len()
+    }
+
+    /// Returns true if the file has a size of 0 bytes.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

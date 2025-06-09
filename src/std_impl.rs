@@ -106,7 +106,7 @@ impl File {
 
         unblock(move || {
             let metadata = move_file.metadata();
-            metadata.map(|m| Metadata(m))
+            metadata.map(Metadata)
         })
         .await
         .map_err(|e| e.into())
