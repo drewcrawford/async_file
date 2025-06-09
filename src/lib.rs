@@ -75,8 +75,11 @@ impl Into<Box<[u8]>> for Data {
 }
 
 impl File {
-    pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self,Error> {
-        sys::File::open(path, priority).await.map(File).map_err(Error)
+    pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self, Error> {
+        sys::File::open(path, priority)
+            .await
+            .map(File)
+            .map_err(Error)
     }
     /**
 
@@ -94,7 +97,11 @@ impl File {
        * The buffer is returned as an opaque type, [Data].
     */
     pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
-        self.0.read(buf_size,priority).await.map(Data).map_err(Error)
+        self.0
+            .read(buf_size, priority)
+            .await
+            .map(Data)
+            .map_err(Error)
     }
 
     /**
@@ -103,12 +110,12 @@ impl File {
     Only one operation may be in-flight at a time.
     */
     pub async fn seek(&mut self, pos: std::io::SeekFrom, priority: Priority) -> Result<u64, Error> {
-        self.0.seek(pos,priority).await.map_err(Error)
+        self.0.seek(pos, priority).await.map_err(Error)
     }
 
     /**
-    Returns metadata about the file.  Compare with `std::fs::File::metadata`.
-*/
+        Returns metadata about the file.  Compare with `std::fs::File::metadata`.
+    */
     pub async fn metadata(&self, priority: Priority) -> Result<Metadata, Error> {
         self.0.metadata(priority).await.map(Metadata).map_err(Error)
     }
@@ -140,8 +147,7 @@ pub async fn exists(path: impl AsRef<Path>, priority: Priority) -> bool {
     sys::exists(path, priority).await
 }
 
-#[derive(Debug)]
-#[derive(thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[error("afile error {0}")]
 pub struct Error(#[from] sys::Error);
 
@@ -193,7 +199,6 @@ Files ought to be send at least.  Probably sync as well, although we don't expos
 I think we don't expect the OS to have pointers into them, so unpin should be safe.
  */
 
-
 /*
 Metadata
 std derives Clone but not Copy
@@ -201,23 +206,26 @@ Doesn't look like we support Eq, Ord, Hash, etc.
 We do have send/sync and Unpin
  */
 
-
-
-#[cfg(test)] mod tests {
+#[cfg(test)]
+mod tests {
     use crate::{Data, File, Metadata, Priority};
 
     #[test]
     fn test_open_file() {
         logwise::context::Context::reset("test_open_file");
         test_executors::spin_on(async {
-            let _file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let _file = File::open("/dev/zero", Priority::unit_test())
+                .await
+                .unwrap();
         });
     }
     #[test]
     fn test_read_file() {
         logwise::context::Context::reset("test_read_file");
         test_executors::spin_on(async {
-            let file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let file = File::open("/dev/zero", Priority::unit_test())
+                .await
+                .unwrap();
             let buf = file.read(1024, Priority::unit_test()).await.unwrap();
             assert_eq!(buf.len(), 1024);
             assert_eq!(buf.iter().all(|&x| x == 0), true);
@@ -228,8 +236,13 @@ We do have send/sync and Unpin
     fn test_seek_file() {
         logwise::context::Context::reset("test_seek_file");
         test_executors::spin_on(async {
-            let mut file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
-            let pos = file.seek(std::io::SeekFrom::Start(1024), Priority::unit_test()).await.unwrap();
+            let mut file = File::open("/dev/zero", Priority::unit_test())
+                .await
+                .unwrap();
+            let pos = file
+                .seek(std::io::SeekFrom::Start(1024), Priority::unit_test())
+                .await
+                .unwrap();
             assert_eq!(pos, 1024);
         });
     }
@@ -242,27 +255,38 @@ We do have send/sync and Unpin
         _assert_send_sync::<Metadata>();
     }
 
-    #[test] fn test_unpin() {
+    #[test]
+    fn test_unpin() {
         fn _assert_unpin<T: Unpin>() {}
         _assert_unpin::<Data>();
         _assert_unpin::<File>();
         _assert_unpin::<Metadata>();
     }
 
-    #[test] fn test_length() {
+    #[test]
+    fn test_length() {
         logwise::context::Context::reset("test_length");
         test_executors::spin_on(async {
-            let file = File::open("/dev/zero", Priority::unit_test()).await.unwrap();
+            let file = File::open("/dev/zero", Priority::unit_test())
+                .await
+                .unwrap();
             let metadata = file.metadata(Priority::unit_test()).await.unwrap();
             assert_eq!(metadata.len(), 0);
         });
     }
 
-    #[test] fn test_exists() {
+    #[test]
+    fn test_exists() {
         logwise::context::Context::reset("test_exists");
         test_executors::spin_on(async {
-            assert_eq!(crate::exists("/dev/zero", Priority::unit_test()).await, true);
-            assert_eq!(crate::exists("/nonexistent/path", Priority::unit_test()).await, false);
+            assert_eq!(
+                crate::exists("/dev/zero", Priority::unit_test()).await,
+                true
+            );
+            assert_eq!(
+                crate::exists("/nonexistent/path", Priority::unit_test()).await,
+                false
+            );
         });
     }
 }
