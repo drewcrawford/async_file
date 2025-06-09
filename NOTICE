@@ -1,0 +1,4 @@
+async_file https://sealedabstract.com/code/async_file
+An executor-agnostic async file IO library
+Copyright 2025 Drew Crawford.
+
