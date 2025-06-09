@@ -1,5 +1,11 @@
 /*!
-afile is a simple file I/O library for Rust.
+async_file is a simple file I/O library for Rust.  It is designed to:
+
+* Follow the stdlib API design closely where reasonable
+* Provide an efficient and backend-agnostic API for file operations
+* Ship a default implementation using the standard library
+
+
 */
 
 mod std_impl;
