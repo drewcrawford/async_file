@@ -1,3 +1,4 @@
+//SPDX-License-Identifier: MIT OR Apache-2.0
 /*!
 Asynchronous file I/O operations with priority handling.
 
