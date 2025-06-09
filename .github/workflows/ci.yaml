@@ -1,6 +1,6 @@
 on: [push]
 env:
-  RUSTFLAGS: "--cap-lints=allow -D warnings"
+  RUSTFLAGS: "-D warnings"
 jobs:
   ci:
     runs-on: ubuntu-latest
