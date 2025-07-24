@@ -1,10 +1,19 @@
+
 //SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::Priority;
 use std::ops::Deref;
 use std::path::Path;
+use js_sys::Reflect;
+use js_sys::wasm_bindgen::JsValue;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Request, RequestInit, WorkerGlobalScope, Response};
+use web_sys::wasm_bindgen::JsCast;
 
 /**
 WASM-based implementation*/
+
+pub static FALLBACK_WASM_ORIGIN: &str = "http://google.com";
+
 
 #[derive(Debug)]
 pub struct File;
@@ -14,6 +23,12 @@ pub struct File;
 pub enum Error {
     #[error("WASM I/O error: {0}")]
     Wasm(String),
+}
+
+impl From<JsValue> for Error {
+    fn from(value: JsValue) -> Self {
+        Error::Wasm(format!("{:?}", value))
+    }
 }
 
 #[derive(Debug)]
@@ -85,6 +100,68 @@ impl std::hash::Hash for Data {
     }
 }
 
-pub async fn exists(_path: impl AsRef<Path>, _priority: Priority) -> bool {
-    todo!()
+fn origin() -> String {
+    let global = js_sys::global();
+    if let Some(window) = web_sys::window() {
+        window.location().origin().unwrap().to_string()
+    }
+    else if let Some(scope) = global.dyn_into::<WorkerGlobalScope>().ok() {
+        todo!("Not implemented")
+    }
+    else {
+        // Fallback to a default origin if we cannot determine it
+        logwise::warn_sync!("Could not determine origin, using '{origin}'", origin=logwise::privacy::LogIt(FALLBACK_WASM_ORIGIN));
+        FALLBACK_WASM_ORIGIN.to_string()
+    }
+}
+
+async fn fetch_with_request(request: Request) -> Result<Response, Error> {
+    let global = js_sys::global();
+    if let Some(window) = web_sys::window() {
+        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+        let response: Response = resp_value.dyn_into().unwrap();
+        Ok(response)
+    }
+    else if let Some(scope) = js_sys::global().dyn_into::<WorkerGlobalScope>().ok() {
+        todo!("worker not implemented yet");
+    }
+    else if let Some(s) = js_sys::Reflect::get(&global, &JsValue::from_str("fetch")).ok() {
+        let into = s.dyn_into::<js_sys::Function>().unwrap();
+        let resp_value = into.call1(&JsValue::undefined(), &request).unwrap();
+        let js_promise = resp_value.dyn_into::<js_sys::Promise>()?;
+        let promise = JsFuture::from(js_promise).await?;
+        let response: Response = promise.dyn_into().unwrap();
+        Ok(response)
+
+    }
+    else {
+        panic!("Could not find fetch in global scope");
+    }
+}
+
+pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
+    let origin = origin();
+
+    let opts = RequestInit::new();
+    opts.set_method("HEAD");
+    let path_str = path.as_ref().to_str().unwrap();
+    let full_path = format!("{origin}/{path_str}");
+    let request = Request::new_with_str_and_init(&full_path, &opts).unwrap();
+    match fetch_with_request(request).await {
+        Ok(response) => {
+            if response.ok() {
+                true
+            }
+            else {
+                logwise::debuginternal_sync!("Got response {status} for url {url}", status=response.status_text(), url=logwise::privacy::LogIt(full_path));
+                false
+            }
+        }
+        Err(e) => {
+            // If the request fails, we assume the file does not exist
+            logwise::debuginternal_sync!("File::exists failed for url {url}; {e}", url=logwise::privacy::LogIt(full_path),e=logwise::privacy::LogIt(e));
+            false
+        }
+    }
+
 }

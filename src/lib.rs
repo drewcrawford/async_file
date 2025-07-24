@@ -565,6 +565,11 @@ Unpin: Automatically derived and safe since there are no self-references.
 mod tests {
     use crate::{Data, File, Metadata, Priority};
 
+    #[cfg(target_arch = "wasm32")]
+    const TEST_FILE: &str = "index.html";
+    #[cfg(not(target_arch = "wasm32"))]
+    const TEST_FILE: &str = "/dev/zero";
+
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[test]
     fn test_open_file() {
@@ -637,19 +642,16 @@ mod tests {
         });
     }
 
-    #[test]
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    fn test_exists() {
+    #[test_executors::async_test]
+    async fn test_exists() {
         logwise::context::Context::reset("test_exists");
-        test_executors::spin_on(async {
-            assert_eq!(
-                crate::exists("/dev/zero", Priority::unit_test()).await,
-                true
-            );
-            assert_eq!(
-                crate::exists("/nonexistent/path", Priority::unit_test()).await,
-                false
-            );
-        });
+        assert_eq!(
+            crate::exists(TEST_FILE, Priority::unit_test()).await,
+            true
+        );
+        assert_eq!(
+            crate::exists("/nonexistent/path", Priority::unit_test()).await,
+            false
+        );
     }
 }
