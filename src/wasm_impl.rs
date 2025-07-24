@@ -6,7 +6,7 @@ use std::path::Path;
 use js_sys::Reflect;
 use js_sys::wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStream};
+use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStream, ReadableStreamDefaultReader};
 use web_sys::wasm_bindgen::JsCast;
 
 /**
@@ -74,7 +74,6 @@ impl Data {
 
 impl File {
     pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self, Error> {
-
         if !exists(path.as_ref(), priority).await {
             Err(Error::NotFound)
         }
@@ -85,8 +84,35 @@ impl File {
         }
     }
 
-    pub async fn read(&self, _buf_size: usize, _priority: Priority) -> Result<Data, Error> {
-        todo!()
+    pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
+        let request_init = RequestInit::new();
+        request_init.set_method("GET");
+        let full_path = full_path(&self.path);
+        let request = Request::new_with_str_and_init(&full_path, &request_init).unwrap();
+        let response = fetch_with_request(request).await?;
+        if !response.ok() {
+            logwise::debuginternal_sync!("Got response {status} for url {url}", status=response.status_text(), url=logwise::privacy::LogIt(full_path));
+            return Err(Error::HttpStatus(response.status()));
+        }
+        let body = response.body().ok_or(Error::NoBody)?;
+        let reader = body.get_reader();
+        let default_reader: ReadableStreamDefaultReader = reader.dyn_into().unwrap();
+        // let mut data = Vec::with_capacity(buf_size);
+        let read_promise = default_reader.read();
+        let read_result = JsFuture::from(read_promise).await?;
+        //get the 'value' property if defined
+        let value = Reflect::get(&read_result, &JsValue::from_str("value"))
+            .map_err(|_| Error::Wasm("Failed to get 'value' from read result".to_string()))?;
+
+        //convert from Uint8Array to Vec<u8>
+        let uint8_array: js_sys::Uint8Array = value.dyn_into().map_err(|_| Error::Wasm("Failed to convert 'value' to Uint8Array".to_string()))?;
+        //clamp the size to buf_size
+        let mut vec = uint8_array.to_vec();
+        if vec.len() > buf_size {
+            vec.truncate(buf_size);
+        }
+        let data = Data(vec.into_boxed_slice());
+        Ok(data)
     }
 
     pub async fn seek(
