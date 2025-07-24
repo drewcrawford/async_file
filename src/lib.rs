@@ -566,9 +566,15 @@ mod tests {
     use crate::{Data, File, Metadata, Priority};
 
     #[cfg(target_arch = "wasm32")]
-    const TEST_FILE: &str = "index.html";
+    const TEST_FILE: &str = "5MB.zip";
     #[cfg(not(target_arch = "wasm32"))]
     const TEST_FILE: &str = "/dev/zero";
+
+    #[cfg(target_arch = "wasm32")]
+    const SEEK_FILE: &str = TEST_FILE;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    const SEEK_FILE: &str = "/etc/services";
 
     #[test_executors::async_test]
     async fn test_open_file() {
@@ -587,28 +593,25 @@ mod tests {
         assert_eq!(buf.len(), 1024);
         #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(buf.iter().all(|&x| x == 0), true);
-        //parse as utf-8
-        let str = std::str::from_utf8(&buf).unwrap();
-        logwise::warn_sync!("{buf}",buf=logwise::privacy::LogIt(&str));
         #[cfg(target_arch = "wasm32")]
         assert!(buf.starts_with(b"<!doctype html>"));
     }
 
-    #[test]
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    fn test_seek_file() {
+    #[test_executors::async_test]
+    async fn test_seek_file() {
         logwise::context::Context::reset("test_seek_file");
-        test_executors::spin_on(async {
-            //tough to seek /dev/zero on linux for some reason
-            let mut file = File::open("/etc/services", Priority::unit_test())
-                .await
-                .unwrap();
-            let pos = file
-                .seek(std::io::SeekFrom::Start(1024), Priority::unit_test())
-                .await
-                .unwrap();
-            assert_eq!(pos, 1024);
-        });
+        //tough to seek /dev/zero on linux for some reason
+        let mut file = File::open(SEEK_FILE, Priority::unit_test())
+            .await
+            .unwrap();
+        let pos = file
+            .seek(std::io::SeekFrom::Start(1024), Priority::unit_test())
+            .await
+            .unwrap();
+        assert_eq!(pos, 1024);
+        let buf = file.read(1024, Priority::unit_test()).await.unwrap();
+        assert_eq!(buf.len(), 1024);
+
     }
 
     #[test]

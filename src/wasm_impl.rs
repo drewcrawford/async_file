@@ -12,12 +12,13 @@ use web_sys::wasm_bindgen::JsCast;
 /**
 WASM-based implementation*/
 
-pub static FALLBACK_WASM_ORIGIN: &str = "http://google.com";
+pub static FALLBACK_WASM_ORIGIN: &str = "http://ipv4.download.thinkbroadband.com/";
 
 
 #[derive(Debug)]
 pub struct File {
     path: String,
+    seek_pos: u64
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -80,6 +81,7 @@ impl File {
         else {
             Ok(Self {
                 path: path.as_ref().to_str().unwrap().to_string(),
+                seek_pos: 0,
             })
         }
     }
@@ -87,6 +89,11 @@ impl File {
     pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
         let request_init = RequestInit::new();
         request_init.set_method("GET");
+        //need to set Range: bytes=0- to read the whole file
+        let map = js_sys::Map::new();
+        let max_byte = self.seek_pos + buf_size as u64;
+        map.set(&"Range".into(), &JsValue::from_str(&format!("bytes={}-{}", self.seek_pos,max_byte)));
+        request_init.set_headers(&map.into());
         let full_path = full_path(&self.path);
         let request = Request::new_with_str_and_init(&full_path, &request_init).unwrap();
         let response = fetch_with_request(request).await?;
@@ -97,30 +104,54 @@ impl File {
         let body = response.body().ok_or(Error::NoBody)?;
         let reader = body.get_reader();
         let default_reader: ReadableStreamDefaultReader = reader.dyn_into().unwrap();
-        // let mut data = Vec::with_capacity(buf_size);
-        let read_promise = default_reader.read();
-        let read_result = JsFuture::from(read_promise).await?;
-        //get the 'value' property if defined
-        let value = Reflect::get(&read_result, &JsValue::from_str("value"))
-            .map_err(|_| Error::Wasm("Failed to get 'value' from read result".to_string()))?;
+        let mut data = Vec::with_capacity(buf_size);
 
-        //convert from Uint8Array to Vec<u8>
-        let uint8_array: js_sys::Uint8Array = value.dyn_into().map_err(|_| Error::Wasm("Failed to convert 'value' to Uint8Array".to_string()))?;
-        //clamp the size to buf_size
-        let mut vec = uint8_array.to_vec();
-        if vec.len() > buf_size {
-            vec.truncate(buf_size);
+        //get the 'value' property if defined
+        loop {
+            let read_promise = default_reader.read();
+            let read_result = JsFuture::from(read_promise).await?;
+            if let Some(value) = Reflect::get(&read_result, &JsValue::from_str("value")).ok() {
+                if value.is_undefined() {
+                    // No more data to read
+                    break;
+                }
+                //convert from Uint8Array to Vec<u8>
+                let uint8_array: js_sys::Uint8Array = value.dyn_into().unwrap();
+                let read_more = buf_size - data.len();
+
+                let read_more_src = uint8_array.length().min(read_more.try_into().unwrap());
+                data.extend(uint8_array.slice(0, read_more_src).to_vec());
+            }
+            else {
+                // No 'value' property, we assume no more data
+                break;
+            }
         }
-        let data = Data(vec.into_boxed_slice());
-        Ok(data)
+        Ok(Data(data.into_boxed_slice()))
+
     }
 
     pub async fn seek(
         &mut self,
-        _pos: std::io::SeekFrom,
+        pos: std::io::SeekFrom,
         _priority: Priority,
     ) -> Result<u64, Error> {
-        todo!()
+        match pos {
+            std::io::SeekFrom::Start(offset) => {
+                self.seek_pos = offset;
+                Ok(self.seek_pos)
+            }
+            std::io::SeekFrom::End(offset) => {
+                panic!("SeekFrom::End is not supported in WASM");
+            }
+            std::io::SeekFrom::Current(offset) => {
+                self.seek_pos = self.seek_pos
+                    .checked_add(offset as u64)
+                    .ok_or_else(|| Error::Wasm("SeekFrom::Current overflow".to_string()))?;
+                Ok(self.seek_pos)
+            }
+        }
+
     }
 
     pub async fn metadata(&self, _priority: Priority) -> Result<Metadata, Error> {
