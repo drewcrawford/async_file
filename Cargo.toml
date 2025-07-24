@@ -12,9 +12,15 @@ keywords = ["async", "await", "file", "io", "filesystem"]
 exclude = [".*"]
 rust-version = "1.85.1"
 [dependencies]
-blocking = "1.6"
 thiserror = "2.0"
 logwise = "0.2"
 priority = "0.1"
 [dev-dependencies]
 test_executors = "0.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+blocking = "1.6"
+
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

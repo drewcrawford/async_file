@@ -40,11 +40,18 @@ The library uses opaque types (`File`, `Data`, `Metadata`) that wrap platform-sp
 implementations, providing a clean abstraction layer while maintaining efficiency.
 */
 
+#[cfg(not(target_arch = "wasm32"))]
 mod std_impl;
+#[cfg(target_arch = "wasm32")]
+mod wasm_impl;
 
 use std::hash::Hash;
 use std::path::Path;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std_impl as sys;
+#[cfg(target_arch = "wasm32")]
+use wasm_impl as sys;
 
 /// A handle to an open file for asynchronous I/O operations.
 ///
@@ -558,6 +565,7 @@ Unpin: Automatically derived and safe since there are no self-references.
 mod tests {
     use crate::{Data, File, Metadata, Priority};
 
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[test]
     fn test_open_file() {
         logwise::context::Context::reset("test_open_file");
@@ -567,6 +575,7 @@ mod tests {
                 .unwrap();
         });
     }
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[test]
     fn test_read_file() {
         logwise::context::Context::reset("test_read_file");
@@ -581,6 +590,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn test_seek_file() {
         logwise::context::Context::reset("test_seek_file");
         test_executors::spin_on(async {
@@ -597,6 +607,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn test_send_sync() {
         fn _assert_send_sync<T: Send + Sync>() {}
         _assert_send_sync::<Data>();
@@ -605,6 +616,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn test_unpin() {
         fn _assert_unpin<T: Unpin>() {}
         _assert_unpin::<Data>();
@@ -613,6 +625,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn test_length() {
         logwise::context::Context::reset("test_length");
         test_executors::spin_on(async {
@@ -625,6 +638,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn test_exists() {
         logwise::context::Context::reset("test_exists");
         test_executors::spin_on(async {
