@@ -28,7 +28,7 @@ blocking = "1.6"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3"
-features = ["RequestInit","Request","Window","Location","Response"]
+features = ["RequestInit","Request","Window","Location","Response","ReadableStream"]
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"

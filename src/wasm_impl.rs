@@ -6,7 +6,7 @@ use std::path::Path;
 use js_sys::Reflect;
 use js_sys::wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, WorkerGlobalScope, Response};
+use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStream};
 use web_sys::wasm_bindgen::JsCast;
 
 /**
@@ -16,13 +16,21 @@ pub static FALLBACK_WASM_ORIGIN: &str = "http://google.com";
 
 
 #[derive(Debug)]
-pub struct File;
+pub struct File {
+    path: String,
+}
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
     #[error("WASM I/O error: {0}")]
     Wasm(String),
+    #[error("HTTP status code {0}")]
+    HttpStatus(u16),
+    #[error("No body")]
+    NoBody,
+    #[error("Not found")]
+    NotFound,
 }
 
 impl From<JsValue> for Error {
@@ -65,8 +73,16 @@ impl Data {
 }
 
 impl File {
-    pub async fn open(_path: impl AsRef<Path>, _priority: Priority) -> Result<Self, Error> {
-        todo!()
+    pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self, Error> {
+
+        if !exists(path.as_ref(), priority).await {
+            Err(Error::NotFound)
+        }
+        else {
+            Ok(Self {
+                path: path.as_ref().to_str().unwrap().to_string(),
+            })
+        }
     }
 
     pub async fn read(&self, _buf_size: usize, _priority: Priority) -> Result<Data, Error> {
@@ -139,13 +155,19 @@ async fn fetch_with_request(request: Request) -> Result<Response, Error> {
     }
 }
 
+fn full_path(path: impl AsRef<Path>) -> String {
+    let path_str = path.as_ref().to_str().unwrap();
+    let origin = origin();
+    let full_path = format!("{origin}/{path_str}");
+    full_path
+}
+
 pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     let origin = origin();
 
     let opts = RequestInit::new();
     opts.set_method("HEAD");
-    let path_str = path.as_ref().to_str().unwrap();
-    let full_path = format!("{origin}/{path_str}");
+    let full_path = full_path(path);
     let request = Request::new_with_str_and_init(&full_path, &opts).unwrap();
     match fetch_with_request(request).await {
         Ok(response) => {

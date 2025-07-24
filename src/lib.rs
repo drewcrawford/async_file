@@ -570,15 +570,12 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     const TEST_FILE: &str = "/dev/zero";
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[test]
-    fn test_open_file() {
+    #[test_executors::async_test]
+    async fn test_open_file() {
         logwise::context::Context::reset("test_open_file");
-        test_executors::spin_on(async {
-            let _file = File::open("/dev/zero", Priority::unit_test())
-                .await
-                .unwrap();
-        });
+        let _file = File::open(TEST_FILE, Priority::unit_test())
+            .await
+            .unwrap();
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[test]
