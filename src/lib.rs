@@ -40,6 +40,18 @@ The library uses opaque types (`File`, `Data`, `Metadata`) that wrap platform-sp
 implementations, providing a clean abstraction layer while maintaining efficiency.
 */
 
+/**
+This function sets the default origin for WASM file operations.
+
+In some circumstances, particularly in Node, the origin URL cannot be determined automatically.
+
+This function allows you to set a default origin URL that will be used when no other origin can
+be determined.
+*/
+fn set_default_origin(origin: &'static str) {
+    sys::set_default_origin(origin);
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod std_impl;
 #[cfg(target_arch = "wasm32")]
@@ -563,7 +575,7 @@ Unpin: Automatically derived and safe since there are no self-references.
 
 #[cfg(test)]
 mod tests {
-    use crate::{Data, File, Metadata, Priority};
+    use crate::{set_default_origin, Data, File, Metadata, Priority};
 
     #[cfg(target_arch = "wasm32")]
     const TEST_FILE: &str = "5MB.zip";
@@ -579,6 +591,7 @@ mod tests {
     #[test_executors::async_test]
     async fn test_open_file() {
         logwise::context::Context::reset("test_open_file");
+        set_default_origin("http://ipv4.download.thinkbroadband.com/");
         let _file = File::open(TEST_FILE, Priority::unit_test())
             .await
             .unwrap();
@@ -586,6 +599,7 @@ mod tests {
     #[test_executors::async_test]
     async fn test_read_file() {
         logwise::context::Context::reset("test_read_file");
+        set_default_origin("http://ipv4.download.thinkbroadband.com/");
         let file = File::open(TEST_FILE, Priority::unit_test())
             .await
             .unwrap();
@@ -600,6 +614,8 @@ mod tests {
     #[test_executors::async_test]
     async fn test_seek_file() {
         logwise::context::Context::reset("test_seek_file");
+        set_default_origin("http://ipv4.download.thinkbroadband.com/");
+
         //tough to seek /dev/zero on linux for some reason
         let mut file = File::open(SEEK_FILE, Priority::unit_test())
             .await
@@ -634,6 +650,8 @@ mod tests {
 
     #[test_executors::async_test]
     async fn test_length() {
+        set_default_origin("http://ipv4.download.thinkbroadband.com/");
+
         logwise::context::Context::reset("test_length");
         let file = File::open(TEST_FILE, Priority::unit_test())
             .await
@@ -648,6 +666,7 @@ mod tests {
     #[test_executors::async_test]
     async fn test_exists() {
         logwise::context::Context::reset("test_exists");
+        set_default_origin("http://ipv4.download.thinkbroadband.com/");
         assert_eq!(
             crate::exists(TEST_FILE, Priority::unit_test()).await,
             true

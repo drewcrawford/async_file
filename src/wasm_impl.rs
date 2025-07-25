@@ -3,6 +3,7 @@
 use crate::Priority;
 use std::ops::Deref;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use js_sys::Reflect;
 use js_sys::wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
@@ -12,7 +13,12 @@ use web_sys::wasm_bindgen::JsCast;
 /**
 WASM-based implementation*/
 
-pub static FALLBACK_WASM_ORIGIN: &str = "http://ipv4.download.thinkbroadband.com/";
+pub static FALLBACK_WASM_ORIGIN: Mutex<Option<&str>> = Mutex::new(None);
+
+pub fn set_default_origin(or: &'static str) {
+    logwise::warn_sync!("Setting default origin to {origin}", origin=logwise::privacy::LogIt(or));
+    *FALLBACK_WASM_ORIGIN.lock().unwrap() = Some(or);
+}
 
 
 #[derive(Debug)]
@@ -198,8 +204,9 @@ fn origin() -> String {
     }
     else {
         // Fallback to a default origin if we cannot determine it
-        logwise::warn_sync!("Could not determine origin, using '{origin}'", origin=logwise::privacy::LogIt(FALLBACK_WASM_ORIGIN));
-        FALLBACK_WASM_ORIGIN.to_string()
+        let o = FALLBACK_WASM_ORIGIN.lock().unwrap().expect("Can't automatically determine origin.  Use set_default_origin to provide a default value here.").to_string();
+        logwise::warn_sync!("Could not determine origin, using '{origin}'; to change this default use the set_default_origin function", origin=logwise::privacy::LogIt(&o));
+        o
     }
 }
 
