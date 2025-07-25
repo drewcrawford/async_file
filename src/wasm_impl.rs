@@ -155,7 +155,22 @@ impl File {
     }
 
     pub async fn metadata(&self, _priority: Priority) -> Result<Metadata, Error> {
-        todo!()
+        let request_init = RequestInit::new();
+        request_init.set_method("HEAD");
+        let full_path = full_path(&self.path);
+        let request = Request::new_with_str_and_init(&full_path, &request_init).unwrap();
+        let response = fetch_with_request(request).await?;
+        if !response.ok() {
+            logwise::debuginternal_sync!("Got response {status} for url {url}", status=response.status_text(), url=logwise::privacy::LogIt(full_path));
+            return Err(Error::HttpStatus(response.status()));
+        }
+        let headers = response.headers().get("content-length").unwrap();
+        let content_length = headers
+            .map(|s| s.parse::<u64>().unwrap())
+            .unwrap();
+        Ok(Metadata {
+            len: content_length,
+        })
     }
 }
 

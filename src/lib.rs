@@ -594,7 +594,7 @@ mod tests {
         #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(buf.iter().all(|&x| x == 0), true);
         #[cfg(target_arch = "wasm32")]
-        assert!(buf.starts_with(b"<!doctype html>"));
+        assert!(buf.starts_with(&[121, 153, 245, 9, 197, 194]), "Expected output, got: {:?}", buf);
     }
 
     #[test_executors::async_test]
@@ -632,17 +632,17 @@ mod tests {
         _assert_unpin::<Metadata>();
     }
 
-    #[test]
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    fn test_length() {
+    #[test_executors::async_test]
+    async fn test_length() {
         logwise::context::Context::reset("test_length");
-        test_executors::spin_on(async {
-            let file = File::open("/dev/zero", Priority::unit_test())
-                .await
-                .unwrap();
-            let metadata = file.metadata(Priority::unit_test()).await.unwrap();
-            assert_eq!(metadata.len(), 0);
-        });
+        let file = File::open(TEST_FILE, Priority::unit_test())
+            .await
+            .unwrap();
+        let metadata = file.metadata(Priority::unit_test()).await.unwrap();
+        #[cfg(target_arch = "wasm32")]
+        assert_eq!(metadata.len(), 5242880);
+        #[cfg(not(target_arch = "wasm32"))]
+        assert_eq!(metadata.len(), 0);
     }
 
     #[test_executors::async_test]
