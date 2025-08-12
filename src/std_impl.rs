@@ -127,3 +127,8 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     logwise::perfwarn_begin!("afile uses blocking on this platform");
     unblock(move || path.exists()).await
 }
+
+pub fn set_default_origin(path: impl AsRef<Path>) -> Result<(), Error> {
+    //nothing to do here, as std impl does not use origins
+    Ok(())
+}
