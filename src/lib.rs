@@ -469,6 +469,8 @@ impl Metadata {
     }
 }
 
+logwise::declare_logging_domain!();
+
 /*
 Boilerplate section, for types in order of appearance in the main section.
  */
@@ -590,7 +592,7 @@ mod tests {
 
     #[test_executors::async_test]
     async fn test_open_file() {
-        logwise::context::Context::reset("test_open_file");
+        logwise::context::Context::reset("test_open_file".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
         let _file = File::open(TEST_FILE, Priority::unit_test())
             .await
@@ -598,7 +600,7 @@ mod tests {
     }
     #[test_executors::async_test]
     async fn test_read_file() {
-        logwise::context::Context::reset("test_read_file");
+        logwise::context::Context::reset("test_read_file".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
         let file = File::open(TEST_FILE, Priority::unit_test())
             .await
@@ -613,7 +615,7 @@ mod tests {
 
     #[test_executors::async_test]
     async fn test_seek_file() {
-        logwise::context::Context::reset("test_seek_file");
+        logwise::context::Context::reset("test_seek_file".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
 
         //tough to seek /dev/zero on linux for some reason
@@ -652,7 +654,7 @@ mod tests {
     async fn test_length() {
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
 
-        logwise::context::Context::reset("test_length");
+        logwise::context::Context::reset("test_length".to_string());
         let file = File::open(TEST_FILE, Priority::unit_test())
             .await
             .unwrap();
@@ -665,7 +667,7 @@ mod tests {
 
     #[test_executors::async_test]
     async fn test_exists() {
-        logwise::context::Context::reset("test_exists");
+        logwise::context::Context::reset("test_exists".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
         assert_eq!(
             crate::exists(TEST_FILE, Priority::unit_test()).await,
