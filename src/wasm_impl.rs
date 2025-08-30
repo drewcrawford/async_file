@@ -169,13 +169,7 @@ impl Data {
     pub fn into_boxed_slice(self) -> Box<[u8]> {
         self.0
     }
-
-    /// Creates a `Data` from a boxed slice (for testing)
-    #[cfg(target_arch = "wasm32")]
-    #[cfg(test)]
-    pub fn from(bytes: Box<[u8]>) -> Self {
-        Data(bytes)
-    }
+    
 }
 
 impl File {
