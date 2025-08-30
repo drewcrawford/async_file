@@ -39,13 +39,12 @@
 use crate::Priority;
 use std::ops::Deref;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use js_sys::Reflect;
 use js_sys::wasm_bindgen::JsValue;
-use some_executor::SomeStaticExecutor;
 use some_executor::task::{Configuration, Task};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStream, ReadableStreamDefaultReader};
+use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStreamDefaultReader};
 use web_sys::wasm_bindgen::JsCast;
 
 /// Global fallback origin URL for environments where it cannot be automatically determined.
@@ -176,7 +175,7 @@ impl Data {
     
     /// Creates a `Data` from a boxed slice (for testing)
     #[cfg(target_arch = "wasm32")]
-    #[doc(hidden)]
+    #[cfg(test)]
     pub fn from(bytes: Box<[u8]>) -> Self {
         Data(bytes)
     }
@@ -240,7 +239,7 @@ impl File {
     /// - Uses HTTP Range headers (e.g., `Range: bytes=0-1023`)
     /// - Reads from a `ReadableStream` using the Streams API
     /// - Accumulates chunks until `buf_size` is reached or stream ends
-    pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
+    pub async fn read(&self, buf_size: usize, _priority: Priority) -> Result<Data, Error> {
         let seek_pos = self.seek_pos;
         let full_path = full_path(&self.path);
         let r = Task::without_notifications("File::read".to_string(), Configuration::default(), async move {
@@ -320,7 +319,7 @@ impl File {
                 self.seek_pos = offset;
                 Ok(self.seek_pos)
             }
-            std::io::SeekFrom::End(offset) => {
+            std::io::SeekFrom::End(_offset) => {
                 panic!("SeekFrom::End is not supported in WASM");
             }
             std::io::SeekFrom::Current(offset) => {
@@ -509,7 +508,6 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     // logwise::info_sync!("afile:a");
     let full_path = full_path(path);
     let r = Task::without_notifications("File::exists".to_string(), Configuration::default(), async move {
-        let origin = origin();
         let opts = RequestInit::new();
 
         opts.set_method("HEAD");
@@ -526,9 +524,8 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
                 }
             }
             Err(e) => {
-
                 // If the request fails, we assume the file does not exist
-                // logwise::debuginternal_sync!("File::exists failed for url {url}; {e}", url=logwise::privacy::LogIt(full_path),e=logwise::privacy::LogIt(e));
+                logwise::debuginternal_sync!("File::exists failed for url {url}; {e}", url=logwise::privacy::LogIt(full_path),e=logwise::privacy::LogIt(e));
                 false
             }
         }
