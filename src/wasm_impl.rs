@@ -169,7 +169,6 @@ impl Data {
     pub fn into_boxed_slice(self) -> Box<[u8]> {
         self.0
     }
-    
 }
 
 impl File {
