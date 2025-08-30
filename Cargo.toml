@@ -7,10 +7,14 @@ license = "MIT OR Apache-2.0"
 description = "An executor-agnostic async file IO library"
 repository = "https://github.com/drewcrawford/async_file"
 homepage = "https://sealedabstract.com/code/async_file"
-categories = ["asynchronous","filesystem"]
+categories = ["asynchronous","filesystem","wasm"]
 keywords = ["async", "await", "file", "io", "filesystem"]
 exclude = [".*"]
 rust-version = "1.85.1"
+
+[features]
+logwise_internal = []
+
 [dependencies]
 thiserror = "2.0.16"
 logwise = "0.3.0"
