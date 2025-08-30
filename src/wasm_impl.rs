@@ -1,4 +1,40 @@
 
+//! WebAssembly implementation of async file I/O operations.
+//!
+//! This module provides a WASM-compatible implementation of the async_file API by leveraging
+//! the browser's Fetch API to read files served over HTTP. This allows async file operations
+//! to work in web browsers and other WASM environments.
+//!
+//! # Architecture
+//!
+//! The WASM implementation treats files as HTTP resources:
+//! - File paths are converted to URLs relative to the origin
+//! - File reading uses HTTP GET requests with Range headers
+//! - File metadata uses HTTP HEAD requests
+//! - Seeking is simulated by adjusting the Range header for subsequent reads
+//!
+//! # Key Components
+//!
+//! - [`File`]: A handle representing a remote file accessed via HTTP
+//! - [`Data`]: An opaque buffer containing bytes read from the file
+//! - [`Metadata`]: File metadata obtained from HTTP headers
+//! - [`Error`]: WASM-specific error types for file operations
+//!
+//! # Limitations
+//!
+//! - Files must be served over HTTP/HTTPS from the same origin or with proper CORS headers
+//! - Write operations are not supported (read-only access)
+//! - `SeekFrom::End` is not supported as it would require knowing the file size first
+//! - File paths are interpreted as URLs relative to the origin
+//!
+//! # Origin Configuration
+//!
+//! The origin URL is determined automatically from the browser context (window.location.origin
+//! for main thread, self.origin for workers). In environments where this cannot be determined
+//! (like Node.js), use [`set_default_origin`] to configure a fallback.
+//!
+//!
+
 //SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::Priority;
 use std::ops::Deref;
@@ -12,11 +48,26 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, WorkerGlobalScope, Response, ReadableStream, ReadableStreamDefaultReader};
 use web_sys::wasm_bindgen::JsCast;
 
-/**
-WASM-based implementation*/
-
+/// Global fallback origin URL for environments where it cannot be automatically determined.
+///
+/// This is used when neither `window.location.origin` nor `self.origin` are available,
+/// such as in Node.js environments running WASM modules.
 pub static FALLBACK_WASM_ORIGIN: Mutex<Option<&str>> = Mutex::new(None);
 
+/// Sets the default origin URL for WASM file operations.
+///
+/// This function configures a fallback origin URL that will be used when the runtime
+/// environment cannot automatically determine the origin. This is particularly useful
+/// in Node.js or other non-browser WASM environments.
+///
+/// # Arguments
+///
+/// * `origin` - A static string slice containing the origin URL (e.g., "http://localhost:8080")
+///
+/// # Note
+///
+/// This should be called before any file operations if running in an environment
+/// where the origin cannot be automatically determined.
 pub fn set_default_origin(or: &'static str) {
     // logwise::warn_sync!("Setting default origin to {origin}", origin=logwise::privacy::LogIt(or));
     *FALLBACK_WASM_ORIGIN.lock().unwrap() = Some(or);
@@ -24,21 +75,43 @@ pub fn set_default_origin(or: &'static str) {
 
 
 
+/// A WASM file handle for asynchronous I/O operations over HTTP.
+///
+/// `File` represents a remote file accessed via HTTP requests. It maintains
+/// the file path and current seek position for sequential reads.
+///
+/// # Implementation Details
+///
+/// - Files are accessed using the Fetch API with appropriate headers
+/// - The seek position is tracked locally and used to set Range headers
+/// - Each read operation fetches only the requested byte range
+///
 #[derive(Debug)]
 pub struct File {
+    /// The path/URL of the file relative to the origin
     path: String,
+    /// Current seek position in bytes from the start of the file
     seek_pos: u64
 }
 
+/// Errors that can occur during WASM file operations.
+///
+/// This enum represents various failure modes specific to the WASM implementation,
+/// including HTTP errors and JavaScript interop issues.
+///
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// A general WASM or JavaScript error occurred
     #[error("WASM I/O error: {0}")]
     Wasm(String),
+    /// HTTP request returned an error status code
     #[error("HTTP status code {0}")]
     HttpStatus(u16),
+    /// HTTP response has no body (required for read operations)
     #[error("No body")]
     NoBody,
+    /// File was not found (404 or failed HEAD request)
     #[error("Not found")]
     NotFound,
 }
@@ -49,15 +122,30 @@ impl From<JsValue> for Error {
     }
 }
 
+/// An opaque buffer containing data read from a WASM file.
+///
+/// `Data` wraps a boxed byte slice containing the contents read from a file
+/// via HTTP. It provides safe access to the underlying bytes through various
+/// traits and methods.
 #[derive(Debug)]
 pub struct Data(Box<[u8]>);
 
+/// Metadata about a WASM file obtained from HTTP headers.
+///
+/// `Metadata` contains information about a file retrieved via HTTP HEAD request,
+/// primarily the file size from the Content-Length header.
+///
 #[derive(Debug, Clone)]
 pub struct Metadata {
+    /// The size of the file in bytes (from Content-Length header)
     len: u64,
 }
 
 impl Metadata {
+    /// Returns the size of the file in bytes.
+    ///
+    /// This value is obtained from the Content-Length HTTP header.
+    ///
     pub fn len(&self) -> u64 {
         self.len
     }
@@ -77,12 +165,41 @@ impl Deref for Data {
 }
 
 impl Data {
+    /// Converts this `Data` into a boxed byte slice.
+    ///
+    /// This method consumes the `Data` and returns the underlying `Box<[u8]>`.
+    /// This is a zero-cost operation as it simply unwraps the internal storage.
+    ///
     pub fn into_boxed_slice(self) -> Box<[u8]> {
         self.0
+    }
+    
+    /// Creates a `Data` from a boxed slice (for testing)
+    #[cfg(target_arch = "wasm32")]
+    #[doc(hidden)]
+    pub fn from(bytes: Box<[u8]>) -> Self {
+        Data(bytes)
     }
 }
 
 impl File {
+    /// Opens a file at the given path for reading via HTTP.
+    ///
+    /// This method performs an HTTP HEAD request to verify the file exists before
+    /// returning a `File` handle. The path is interpreted as a URL relative to
+    /// the current origin.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the file, relative to the origin
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(File)` if the file exists and is accessible, or an error if:
+    /// - The file doesn't exist (404 response)
+    /// - Network error occurs
+    /// - CORS restrictions prevent access
     pub async fn open(path: impl AsRef<Path>, priority: Priority) -> Result<Self, Error> {
         let path = path.as_ref().to_owned();
         let move_path = path.clone();
@@ -100,6 +217,29 @@ impl File {
         }
     }
 
+    /// Reads up to `buf_size` bytes from the file at the current position.
+    ///
+    /// This method performs an HTTP GET request with a Range header to fetch
+    /// only the requested bytes. The read starts at the current seek position.
+    ///
+    /// # Arguments
+    ///
+    /// * `buf_size` - Maximum number of bytes to read
+    /// * `priority` - The priority for this operation
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Data` object containing the bytes read. The actual number
+    /// of bytes may be less than `buf_size` if:
+    /// - End of file is reached
+    /// - The server doesn't support range requests
+    /// - Network interruption occurs
+    ///
+    /// # Implementation Details
+    ///
+    /// - Uses HTTP Range headers (e.g., `Range: bytes=0-1023`)
+    /// - Reads from a `ReadableStream` using the Streams API
+    /// - Accumulates chunks until `buf_size` is reached or stream ends
     pub async fn read(&self, buf_size: usize, priority: Priority) -> Result<Data, Error> {
         let seek_pos = self.seek_pos;
         let full_path = full_path(&self.path);
@@ -150,6 +290,26 @@ impl File {
 
     }
 
+    /// Seeks to a position in the file.
+    ///
+    /// This method updates the internal seek position that will be used for
+    /// the next read operation. The actual seeking happens lazily when the
+    /// next read is performed (via the Range header).
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to seek to
+    /// * `priority` - The priority for this operation (currently unused)
+    ///
+    /// # Returns
+    ///
+    /// Returns the new position from the start of the file in bytes.
+    ///
+    /// # Limitations
+    ///
+    /// - `SeekFrom::End` is not supported and will panic
+    /// - `SeekFrom::Current` with negative offset may cause overflow
+    ///
     pub async fn seek(
         &mut self,
         pos: std::io::SeekFrom,
@@ -172,6 +332,26 @@ impl File {
         }
     }
 
+    /// Returns metadata about the file.
+    ///
+    /// This method performs an HTTP HEAD request to retrieve file metadata,
+    /// primarily the file size from the Content-Length header.
+    ///
+    /// # Arguments
+    ///
+    /// * `priority` - The priority for this operation (currently unused)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Metadata` object containing the file size.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - Content-Length header is missing or invalid
+    ///
     pub async fn metadata(&self, _priority: Priority) -> Result<Metadata, Error> {
         let full_path = full_path(&self.path);
         let full_path_move = full_path.clone();
@@ -211,6 +391,18 @@ impl std::hash::Hash for Data {
     }
 }
 
+/// Determines the origin URL for the current WASM environment.
+///
+/// This function attempts to determine the origin in the following order:
+/// 1. From `window.location.origin` (browser main thread)
+/// 2. From `self.origin` (web workers)
+/// 3. From the configured fallback origin (Node.js or other environments)
+///
+/// # Panics
+///
+/// Panics if no origin can be determined and no fallback has been configured
+/// via [`set_default_origin`].
+///
 fn origin() -> String {
     let global = js_sys::global();
     if let Some(window) = web_sys::window() {
@@ -227,6 +419,29 @@ fn origin() -> String {
     }
 }
 
+/// Performs a fetch operation in the current WASM environment.
+///
+/// This function abstracts over different JavaScript contexts (window, worker, global)
+/// to perform HTTP requests using the Fetch API.
+///
+/// # Arguments
+///
+/// * `request` - The configured `Request` object to send
+///
+/// # Returns
+///
+/// Returns the `Response` object on success, or an error if the fetch fails.
+///
+/// # Implementation Details
+///
+/// Attempts to find the fetch function in:
+/// 1. `window.fetch` (browser main thread)
+/// 2. `self.fetch` (web workers)
+/// 3. `global.fetch` (Node.js with fetch polyfill)
+///
+/// # Panics
+///
+/// Panics if no fetch implementation is found in the global scope.
 async fn fetch_with_request(request: Request) -> Result<Response, Error> {
     let global = js_sys::global();
     if let Some(window) = web_sys::window() {
@@ -253,6 +468,16 @@ async fn fetch_with_request(request: Request) -> Result<Response, Error> {
     }
 }
 
+/// Converts a file path to a full URL by prepending the origin.
+///
+/// # Arguments
+///
+/// * `path` - The file path relative to the origin
+///
+/// # Returns
+///
+/// A complete URL string combining the origin and path.
+///
 fn full_path(path: impl AsRef<Path>) -> String {
     let path_str = path.as_ref().to_str().unwrap();
     let origin = origin();
@@ -260,6 +485,26 @@ fn full_path(path: impl AsRef<Path>) -> String {
     full_path
 }
 
+/// Tests if a file exists at the given path.
+///
+/// This function performs an HTTP HEAD request to check if a file is accessible
+/// at the given URL path. It returns `true` if the server responds with a
+/// successful status code (2xx), `false` otherwise.
+///
+/// # Arguments
+///
+/// * `path` - The path to check, relative to the origin
+/// * `priority` - The priority for this operation (currently unused)
+///
+/// # Returns
+///
+/// Returns `true` if the file exists and is accessible, `false` otherwise.
+///
+/// # Implementation Notes
+///
+/// - Uses HEAD request to avoid downloading file contents
+/// - Returns `false` for any error (network, CORS, 404, etc.)
+/// - Does not distinguish between different types of failures
 pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     // logwise::info_sync!("afile:a");
     let full_path = full_path(path);

@@ -48,7 +48,7 @@ In some circumstances, particularly in Node, the origin URL cannot be determined
 This function allows you to set a default origin URL that will be used when no other origin can
 be determined.
 */
-fn set_default_origin(origin: &'static str) {
+pub fn set_default_origin(origin: &'static str) {
     sys::set_default_origin(origin);
 }
 
