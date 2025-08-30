@@ -1,4 +1,4 @@
-# matrix v4
+# matrix v5
 on: [push,pull_request]
 env:
   FATAL_WARNINGS_1: "build.rustflags=['-Dwarnings']"
@@ -63,7 +63,12 @@ jobs:
           echo "target is ${TARGET_ARG}"    
 
       #      - name: Github update Rust
-      #        if: runner.os == 'Linux' && !(env.GITEA_ACTIONS == 'true')      #        run: |      #          # at the moment, GitHub is too far behind mainline rust (v1.89.0-v1.91.0-nightly)      #          rustup update      - name: Install wasm target      #  if: matrix.target == 'wasm32-unknown-unknown' && !(env.GITEA_ACTIONS == 'true')      #  run: rustup ${{ matrix.channel}} target add wasm32-unknown-unknown
+      #        if: runner.os == 'Linux' && !(env.GITEA_ACTIONS == 'true')      #        run: |      #          # at the moment, GitHub is too far behind mainline rust (v1.89.0-v1.91.0-nightly)      #          rustup update
+
+      - name: Install wasm target
+        if: matrix.target == 'wasm32-unknown-unknown' && !(env.GITEA_ACTIONS == 'true')
+        run: rustup ${{ matrix.channel}} target add wasm32-unknown-unknown
+
       - name: Install wasm-bindgen-cli
         if: matrix.target == 'wasm32-unknown-unknown' && !(env.GITEA_ACTIONS == 'true')
         run: cargo ${{ matrix.channel }} install wasm-bindgen-cli
