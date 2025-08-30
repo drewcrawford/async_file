@@ -36,7 +36,7 @@
 //! ```
 //! # async fn example() -> Result<(), async_file::Error> {
 //! use async_file::{File, Priority};
-//! 
+//!
 //! // Open and read from a file
 //! let file = File::open("/dev/zero", Priority::unit_test()).await?;
 //! let data = file.read(1024, Priority::unit_test()).await?;
@@ -52,12 +52,12 @@
 //! # async fn example() -> Result<(), async_file::Error> {
 //! use async_file::{File, Priority};
 //! use std::io::SeekFrom;
-//! 
+//!
 //! let mut file = File::open("/dev/zero", Priority::unit_test()).await?;
-//! 
+//!
 //! // Seek to position 100
 //! file.seek(SeekFrom::Start(100), Priority::unit_test()).await?;
-//! 
+//!
 //! // Read from the new position
 //! let data = file.read(50, Priority::unit_test()).await?;
 //! assert_eq!(data.len(), 50);
@@ -100,7 +100,7 @@ use std::sync::Arc;
 /// # async fn example() -> Result<(), async_file::Error> {
 /// // Internal usage - users interact through the main async_file::File type
 /// use async_file::File;
-/// 
+///
 /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
 /// let data = file.read(100, Priority::unit_test()).await?;
 /// assert_eq!(data.len(), 100);
@@ -131,7 +131,7 @@ pub struct File(Arc<std::fs::File>);
 /// # use async_file::Priority;
 /// # async fn example() {
 /// use async_file::File;
-/// 
+///
 /// match File::open("nonexistent.txt", Priority::unit_test()).await {
 ///     Ok(_) => println!("File opened"),
 ///     Err(e) => eprintln!("Error: {}", e),
@@ -170,16 +170,16 @@ pub enum Error {
 /// # use async_file::Priority;
 /// # async fn example() -> Result<(), async_file::Error> {
 /// use async_file::File;
-/// 
+///
 /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
 /// let data = file.read(10, Priority::unit_test()).await?;
-/// 
+///
 /// // Access as a slice
 /// assert_eq!(data.as_ref(), &[0; 10]);
-/// 
+///
 /// // Direct indexing via Deref
 /// assert_eq!(data[0], 0);
-/// 
+///
 /// // Convert to owned Box<[u8]>
 /// let boxed = data.into_boxed_slice();
 /// assert_eq!(boxed.len(), 10);
@@ -215,13 +215,13 @@ pub struct Data(Box<[u8]>);
 /// # use async_file::Priority;
 /// # async fn example() -> Result<(), async_file::Error> {
 /// use async_file::File;
-/// 
+///
 /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
 /// let metadata = file.metadata(Priority::unit_test()).await?;
-/// 
+///
 /// // /dev/zero is a special file with size 0
 /// assert_eq!(metadata.len(), 0);
-/// 
+///
 /// // Metadata can be cloned
 /// let metadata_copy = metadata.clone();
 /// assert_eq!(metadata_copy.len(), 0);
@@ -243,7 +243,7 @@ impl Metadata {
     /// # use async_file::Priority;
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::File;
-    /// 
+    ///
     /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let metadata = file.metadata(Priority::unit_test()).await?;
     /// println!("File size: {} bytes", metadata.len());
@@ -265,10 +265,10 @@ impl AsRef<[u8]> for Data {
     /// # use async_file::Priority;
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::File;
-    /// 
+    ///
     /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let data = file.read(5, Priority::unit_test()).await?;
-    /// 
+    ///
     /// // Use as_ref() to get a slice
     /// let slice: &[u8] = data.as_ref();
     /// assert_eq!(slice, &[0, 0, 0, 0, 0]);
@@ -283,7 +283,7 @@ impl AsRef<[u8]> for Data {
 
 impl Deref for Data {
     type Target = [u8];
-    
+
     /// Dereferences to the underlying byte slice.
     ///
     /// This allows direct indexing and slice operations on `Data`.
@@ -294,14 +294,14 @@ impl Deref for Data {
     /// # use async_file::Priority;
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::File;
-    /// 
+    ///
     /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let data = file.read(10, Priority::unit_test()).await?;
-    /// 
+    ///
     /// // Direct indexing via Deref
     /// assert_eq!(data[0], 0);
     /// assert_eq!(data[9], 0);
-    /// 
+    ///
     /// // Slice operations
     /// let first_five = &data[..5];
     /// assert_eq!(first_five.len(), 5);
@@ -333,10 +333,10 @@ impl Data {
     /// # use async_file::Priority;
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::File;
-    /// 
+    ///
     /// let file = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let data = file.read(8, Priority::unit_test()).await?;
-    /// 
+    ///
     /// // Convert to Box<[u8]> for storage
     /// let boxed: Box<[u8]> = data.into_boxed_slice();
     /// assert_eq!(boxed.len(), 8);
@@ -427,13 +427,13 @@ impl PartialEq for Data {
     /// # use async_file::Priority;
     /// # async fn example() -> Result<(), async_file::Error> {
     /// use async_file::File;
-    /// 
+    ///
     /// let file1 = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let data1 = file1.read(10, Priority::unit_test()).await?;
-    /// 
+    ///
     /// let file2 = File::open("/dev/zero", Priority::unit_test()).await?;
     /// let data2 = file2.read(10, Priority::unit_test()).await?;
-    /// 
+    ///
     /// // Both reads from /dev/zero return all zeros
     /// assert_eq!(data1, data2);
     /// # Ok(())
@@ -482,7 +482,7 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
 /// # fn set_default_origin(_: impl AsRef<std::path::Path>) -> Result<(), DummyError> { Ok(()) }
 /// // This is a no-op on non-WASM platforms
 /// set_default_origin("/some/path")?;
-/// 
+///
 /// // File operations work the same regardless
 /// # Ok(())
 /// # }

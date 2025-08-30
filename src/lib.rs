@@ -131,7 +131,7 @@ if exists(path, Priority::unit_test()).await {
 use async_file::{File, Priority};
 
 // Critical system file - use highest priority
-let system_file = File::open("/critical/system.conf", 
+let system_file = File::open("/critical/system.conf",
     Priority::highest_async()).await?;
 
 // Background logging - use low priority
@@ -142,7 +142,7 @@ let system_file = File::open("/critical/system.conf",
 // Priority::new(0.8) for high priority tasks
 
 // Unit tests - use dedicated test priority
-let test_file = File::open("test_fixture.txt", 
+let test_file = File::open("test_fixture.txt",
     Priority::unit_test()).await?;
 # Ok(())
 # }
@@ -576,7 +576,7 @@ impl File {
 /// use async_file::{exists, File, Priority};
 ///
 /// let path = "optional_config.json";
-/// 
+///
 /// if exists(path, Priority::unit_test()).await {
 ///     let file = File::open(path, Priority::unit_test()).await?;
 ///     // Process configuration...
@@ -595,14 +595,14 @@ impl File {
 /// use async_file::{exists, Priority};
 ///
 /// let required_files = ["data.db", "config.yml", "schema.sql"];
-/// 
+///
 /// for file in &required_files {
 ///     if !exists(file, Priority::unit_test()).await {
 ///         eprintln!("Missing required file: {}", file);
 ///         return;
 ///     }
 /// }
-/// 
+///
 /// println!("All required files present");
 /// # }
 /// ```
@@ -659,7 +659,7 @@ pub async fn exists(path: impl AsRef<Path>, priority: Priority) -> bool {
 /// // The ? operator works with async_file::Error
 /// let file = File::open("data.txt", Priority::unit_test()).await?;
 /// let contents = file.read_all(Priority::unit_test()).await?;
-/// 
+///
 /// println!("Read {} bytes", contents.len());
 /// # Ok(())
 /// # }
@@ -674,7 +674,7 @@ pub async fn exists(path: impl AsRef<Path>, priority: Priority) -> bool {
 /// // async_file::Error can be converted to Box<dyn Error>
 /// let file = File::open("config.json", Priority::highest_async()).await?;
 /// let data = file.read_all(Priority::highest_async()).await?;
-/// 
+///
 /// # Ok(())
 /// # }
 /// ```
@@ -855,7 +855,7 @@ Unpin: Automatically derived and safe since there are no self-references.
 
 #[cfg(test)]
 mod tests {
-    use crate::{set_default_origin, Data, File, Metadata, Priority};
+    use crate::{Data, File, Metadata, Priority, set_default_origin};
 
     #[cfg(target_arch = "wasm32")]
     const TEST_FILE: &str = "5MB.zip";
@@ -872,23 +872,23 @@ mod tests {
     async fn test_open_file() {
         logwise::context::Context::reset("test_open_file".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
-        let _file = File::open(TEST_FILE, Priority::unit_test())
-            .await
-            .unwrap();
+        let _file = File::open(TEST_FILE, Priority::unit_test()).await.unwrap();
     }
     #[test_executors::async_test]
     async fn test_read_file() {
         logwise::context::Context::reset("test_read_file".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
-        let file = File::open(TEST_FILE, Priority::unit_test())
-            .await
-            .unwrap();
+        let file = File::open(TEST_FILE, Priority::unit_test()).await.unwrap();
         let buf = file.read(1024, Priority::unit_test()).await.unwrap();
         assert_eq!(buf.len(), 1024);
         #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(buf.iter().all(|&x| x == 0), true);
         #[cfg(target_arch = "wasm32")]
-        assert!(buf.starts_with(&[121, 153, 245, 9, 197, 194]), "Expected output, got: {:?}", buf);
+        assert!(
+            buf.starts_with(&[121, 153, 245, 9, 197, 194]),
+            "Expected output, got: {:?}",
+            buf
+        );
     }
 
     #[test_executors::async_test]
@@ -897,9 +897,7 @@ mod tests {
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
 
         //tough to seek /dev/zero on linux for some reason
-        let mut file = File::open(SEEK_FILE, Priority::unit_test())
-            .await
-            .unwrap();
+        let mut file = File::open(SEEK_FILE, Priority::unit_test()).await.unwrap();
         let pos = file
             .seek(std::io::SeekFrom::Start(1024), Priority::unit_test())
             .await
@@ -907,7 +905,6 @@ mod tests {
         assert_eq!(pos, 1024);
         let buf = file.read(1024, Priority::unit_test()).await.unwrap();
         assert_eq!(buf.len(), 1024);
-
     }
 
     #[test]
@@ -933,9 +930,7 @@ mod tests {
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
 
         logwise::context::Context::reset("test_length".to_string());
-        let file = File::open(TEST_FILE, Priority::unit_test())
-            .await
-            .unwrap();
+        let file = File::open(TEST_FILE, Priority::unit_test()).await.unwrap();
         let metadata = file.metadata(Priority::unit_test()).await.unwrap();
         #[cfg(target_arch = "wasm32")]
         assert_eq!(metadata.len(), 5242880);
@@ -947,10 +942,7 @@ mod tests {
     async fn test_exists() {
         logwise::context::Context::reset("test_exists".to_string());
         set_default_origin("http://ipv4.download.thinkbroadband.com/");
-        assert_eq!(
-            crate::exists(TEST_FILE, Priority::unit_test()).await,
-            true
-        );
+        assert_eq!(crate::exists(TEST_FILE, Priority::unit_test()).await, true);
         assert_eq!(
             crate::exists("/nonexistent/path", Priority::unit_test()).await,
             false
