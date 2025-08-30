@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! WebAssembly implementation of async file I/O operations.
 //!
 //! This module provides a WASM-compatible implementation of the async_file API by leveraging
