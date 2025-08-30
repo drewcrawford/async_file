@@ -12,24 +12,24 @@ keywords = ["async", "await", "file", "io", "filesystem"]
 exclude = [".*"]
 rust-version = "1.85.1"
 [dependencies]
-thiserror = "2.0"
-logwise = "0.2"
-priority = "0.1"
+thiserror = "2.0.16"
+logwise = "0.3.0"
+priority = "0.1.1"
 [dev-dependencies]
-test_executors = "0.3"
+test_executors = "0.3.5"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3"
-wasm-bindgen-futures = "0.4"
+js-sys = "0.3.77"
+wasm-bindgen-futures = "0.4.50"
 some_executor = "0.6.1"
 # temp?
-continue = "0.1"
+continue = "0.1.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-blocking = "1.6"
+blocking = "1.6.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-version = "0.3"
+version = "0.3.77"
 features = [
     "RequestInit",
     "Request",
@@ -42,6 +42,6 @@ features = [
 ]
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = "0.3.50"
 
 [patch.crates-io]
