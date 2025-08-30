@@ -496,7 +496,6 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
 ///
 /// This allows code to be written that works on both platforms without
 /// conditional compilation.
-pub fn set_default_origin(_path: impl AsRef<Path>) -> Result<(), Error> {
+pub fn set_default_origin(_path: impl AsRef<Path>) {
     //nothing to do here, as std impl does not use origins
-    Ok(())
 }
