@@ -269,9 +269,7 @@ impl File {
                 loop {
                     let read_promise = default_reader.read();
                     let read_result = JsFuture::from(read_promise).await?;
-                    if let Some(value) =
-                        Reflect::get(&read_result, &JsValue::from_str("value")).ok()
-                    {
+                    if let Ok(value) = Reflect::get(&read_result, &JsValue::from_str("value")) {
                         if value.is_undefined() {
                             // No more data to read
                             break;
@@ -363,7 +361,7 @@ impl File {
     pub async fn metadata(&self, _priority: Priority) -> Result<Metadata, Error> {
         let full_path = full_path(&self.path);
         let full_path_move = full_path.clone();
-        let t = Task::without_notifications(
+        Task::without_notifications(
             "File::metadata".to_string(),
             Configuration::default(),
             async move {
@@ -385,8 +383,7 @@ impl File {
             },
         )
         .pin_current()
-        .await;
-        t
+        .await
     }
 }
 
@@ -420,7 +417,7 @@ fn origin() -> String {
     let global = js_sys::global();
     if let Some(window) = web_sys::window() {
         window.location().origin().unwrap().to_string()
-    } else if let Some(scope) = global.dyn_into::<WorkerGlobalScope>().ok() {
+    } else if let Ok(scope) = global.dyn_into::<WorkerGlobalScope>() {
         scope.origin().to_string()
     } else {
         // Fallback to a default origin if we cannot determine it
@@ -462,11 +459,11 @@ async fn fetch_with_request(request: Request) -> Result<Response, Error> {
         let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
         let response: Response = resp_value.dyn_into().unwrap();
         Ok(response)
-    } else if let Some(scope) = js_sys::global().dyn_into::<WorkerGlobalScope>().ok() {
+    } else if let Ok(scope) = js_sys::global().dyn_into::<WorkerGlobalScope>() {
         let resp_value = JsFuture::from(scope.fetch_with_request(&request)).await?;
         let response: Response = resp_value.dyn_into().unwrap();
         Ok(response)
-    } else if let Some(s) = js_sys::Reflect::get(&global, &JsValue::from_str("fetch")).ok() {
+    } else if let Ok(s) = js_sys::Reflect::get(&global, &JsValue::from_str("fetch")) {
         let into = s.dyn_into::<js_sys::Function>().unwrap();
         let resp_value = into.call1(&JsValue::undefined(), &request).unwrap();
         let js_promise = resp_value.dyn_into::<js_sys::Promise>()?;
@@ -518,7 +515,7 @@ fn full_path(path: impl AsRef<Path>) -> String {
 pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     // logwise::info_sync!("afile:a");
     let full_path = full_path(path);
-    let r = Task::without_notifications(
+    Task::without_notifications(
         "File::exists".to_string(),
         Configuration::default(),
         async move {
@@ -549,6 +546,5 @@ pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
         },
     )
     .pin_current()
-    .await;
-    r
+    .await
 }
