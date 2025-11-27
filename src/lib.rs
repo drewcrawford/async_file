@@ -855,7 +855,7 @@ Unpin: Automatically derived and safe since there are no self-references.
 
 #[cfg(test)]
 mod tests {
-    use crate::{Data, File, Metadata, Priority, set_default_origin};
+    use crate::{Data, Error, File, Metadata, Priority, set_default_origin};
 
     #[cfg(target_arch = "wasm32")]
     const TEST_FILE: &str = "5MB.zip";
@@ -914,6 +914,7 @@ mod tests {
         _assert_send_sync::<Data>();
         _assert_send_sync::<File>();
         _assert_send_sync::<Metadata>();
+        _assert_send_sync::<Error>();
     }
 
     #[test]
@@ -923,6 +924,7 @@ mod tests {
         _assert_unpin::<Data>();
         _assert_unpin::<File>();
         _assert_unpin::<Metadata>();
+        _assert_unpin::<Error>();
     }
 
     #[test_executors::async_test]
