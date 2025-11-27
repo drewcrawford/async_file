@@ -355,7 +355,7 @@ impl File {
         File(Arc::new(file))
     }
     pub async fn open(path: impl AsRef<Path>, _priority: Priority) -> Result<Self, Error> {
-        logwise::perfwarn_begin!("async_file uses blocking on this platform");
+        logwise::perfwarn_begin_if!(logwise::Duration::from_millis(1), "async_file uses blocking on this platform");
         let path = path.as_ref().to_owned();
         unblock(|| std::fs::File::open(path))
             .await
@@ -365,7 +365,7 @@ impl File {
 
     pub async fn read(&self, buf_size: usize, _priority: Priority) -> Result<Data, Error> {
         let mut move_file = self.0.clone();
-        logwise::perfwarn_begin!("async_file uses blocking on this platform");
+        logwise::perfwarn_begin_if!(logwise::Duration::from_millis(1), "async_file uses blocking on this platform");
         unblock(move || {
             let mut buf = vec![0; buf_size];
             let read = move_file.read(&mut buf);
@@ -388,7 +388,7 @@ impl File {
         _priority: Priority,
     ) -> Result<u64, Error> {
         let mut move_file = self.0.clone();
-        logwise::perfwarn_begin!("async_file uses blocking on this platform");
+        logwise::perfwarn_begin_if!(logwise::Duration::from_millis(1), "async_file uses blocking on this platform");
         unblock(move || {
             let pos = move_file.seek(pos);
             match pos {
@@ -402,7 +402,7 @@ impl File {
 
     pub async fn metadata(&self, _priority: Priority) -> Result<Metadata, Error> {
         let move_file = self.0.clone();
-        logwise::perfwarn_begin!("async_file uses blocking on this platform");
+        logwise::perfwarn_begin_if!(logwise::Duration::from_millis(1), "async_file uses blocking on this platform");
 
         unblock(move || {
             let metadata = move_file.metadata();
@@ -447,7 +447,7 @@ impl PartialEq for Data {
 
 pub async fn exists(path: impl AsRef<Path>, _priority: Priority) -> bool {
     let path = path.as_ref().to_owned();
-    logwise::perfwarn_begin!("async_file uses blocking on this platform");
+    logwise::perfwarn_begin_if!(logwise::Duration::from_millis(1), "async_file uses blocking on this platform");
     unblock(move || path.exists()).await
 }
 
