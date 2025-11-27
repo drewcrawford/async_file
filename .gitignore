@@ -1,1 +1,5 @@
-/target
+target/
+.claude/
+.idea/
+5MB.zip
+Cargo.lock

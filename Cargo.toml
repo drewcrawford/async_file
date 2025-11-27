@@ -45,5 +45,3 @@ features = [
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3.50"
-
-[patch.crates-io]
