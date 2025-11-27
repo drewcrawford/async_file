@@ -92,18 +92,23 @@ let header = file.read(128, Priority::unit_test()).await?;
 
 // Skip to data section at byte 1024
 file.seek(SeekFrom::Start(1024), Priority::unit_test()).await?;
-let data = file.read(512, Priority::unit_test()).await?;
+
+// Read data
+let data = file.read(4096, Priority::unit_test()).await?;
 ```
 
-### Checking File Existence
+### Checking File Existence Before Opening
 
 ```rust
 use async_file::{exists, File, Priority};
 
-// Check if file exists before opening
-if exists("/path/to/config", Priority::unit_test()).await {
-    let file = File::open("/path/to/config", Priority::unit_test()).await?;
-    // ... use file
+let path = "important.dat";
+
+if exists(path, Priority::unit_test()).await {
+    let file = File::open(path, Priority::highest_async()).await?;
+    // Process file...
+} else {
+    eprintln!("File not found: {}", path);
 }
 ```
 
@@ -112,13 +117,20 @@ if exists("/path/to/config", Priority::unit_test()).await {
 ```rust
 use async_file::{File, Priority};
 
-// High priority for critical operations
-let file = File::open("/critical/data", Priority::highest_async()).await?;
-let data = file.read(1024, Priority::highest_async()).await?;
+// Critical system file - use highest priority
+let system_file = File::open("/critical/system.conf",
+    Priority::highest_async()).await?;
 
-// Unit test priority for testing
-let test_file = File::open("/dev/zero", Priority::unit_test()).await?;
-let test_data = test_file.read(100, Priority::unit_test()).await?;
+// Background logging - use low priority
+// For other priority levels, use Priority::new()
+// Priority::new(0.2) for low priority tasks
+
+// User-facing operation - use high priority
+// Priority::new(0.8) for high priority tasks
+
+// Unit tests - use dedicated test priority
+let test_file = File::open("test_fixture.txt",
+    Priority::unit_test()).await?;
 ```
 
 ## API Overview
@@ -160,15 +172,41 @@ let bytes: &[u8] = data.as_ref();
 let boxed: Box<[u8]> = data.into_boxed_slice();
 ```
 
+### Platform Support
+
+- **Unix/Linux/macOS**: Uses `blocking` crate to run `std::fs` operations in a thread pool
+- **WASM**: Uses web fetch API for remote file access (requires `set_default_origin`)
+- **Windows**: Same as Unix implementation using `blocking` crate
+
 ### Utility Functions
 
-```rust
-// Check if a file exists
-let exists = async_file::exists("/path/to/file", Priority::unit_test()).await;
+#### Checking File Existence
 
-// Configure default origin for relative paths
-async_file::set_default_origin("/base/path");
+```rust
+use async_file::{exists, Priority};
+
+// Check if a file exists
+if exists("/path/to/file", Priority::unit_test()).await {
+    println!("File exists");
+} else {
+    println!("File not found");
+}
 ```
+
+#### Setting Default Origin for WASM
+
+In WASM environments, files are fetched from remote URLs rather than accessed from a local filesystem. Use `set_default_origin` to set the base URL for these fetch operations.
+
+```rust
+use async_file::set_default_origin;
+
+// Set origin for WASM file fetching
+set_default_origin("https://cdn.example.com/assets");
+
+// On non-WASM platforms, this is a no-op
+```
+
+**When to use**: Call this function at application startup when running in WASM environments (particularly Node.js) where the origin URL cannot be determined automatically, or when you need to fetch files from a specific server.
 
 ## Priority System
 
